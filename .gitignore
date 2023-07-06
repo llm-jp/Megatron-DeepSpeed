@@ -7,11 +7,16 @@ apex/
 # logging
 wandb/
 tensorboard/
+/logs/
+checkpoints/gpt2_345m/
 
 # dataset
 dataset/BookCorpusDataset*
 dataset/gpt2-vocab.json
 dataset/gpt2-merges.txt
+
+# hostfile
+/hostfile*
 
 # Distribution / packaging
 build/
