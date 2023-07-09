@@ -130,6 +130,24 @@ bash scripts/mpirun/345m_dp16.sh
 
 標準出力を保存したい場合は、`bash scripts/mpirun/345m_dp16.sh > log.txt` などとしてください。
 
+### mpirun: カスタマイズ引数付
+
+`345m_custom.sh` スクリプトを使うことにより、ノード数、ノードあたりGPU数、ホストファイルをコマンドラインから指定できるようになります。（その他、パイプライン並列、テンソル並列の引数も用意されていますが、現状では反映されず、将来的に利用可能になります）
+
+
+```bash
+bash scripts/mpirun/345m_custom.sh -h
+Usage: scripts/mpirun/345m_custom.sh [-n|--nodes <number of nodes>] [-g|--gpus <number of GPUs per node>] [-f|--hostfile <hostfile path>] [--pp <Pipeline parallel size>] [--tp <Tensor parallel size>]
+```
+
+下の例では、１ノードあたり８GPUで８ノード実行（合計64GPU）し、ホストファイルは `hostfile` パイプライン並列、テンソル並列なし（並列数: 1）で実行します。
+
+```bash
+source .env/bin/activate
+bash scripts/mpirun/345m_custom.sh -n 8 -g 8 -f hostfile --pp 1 --tp 1
+```
+
+
 ## Appendix
 
 ### hostfile (推奨)
@@ -150,9 +168,15 @@ mpirun -np $WORLD_SIZE --npernode $GPUS_PER_NODE \
 ### 実行前計算ノードチェック
 
 マルチノード実行前に、各計算ノードに正常にGPUデバイスが認識されているか、numactl がインストールされているかどうか、hostfile と `check_hosts.sh` スクリプトでチェックすることができます。
+実行例:
 
 ```bash
 bash scripts/check_hosts.sh hostfile
+
+Host 10.2.72.135: OK: 8 GPUs found
+Host 10.2.72.135: OK: numactl exists
+Host 10.2.72.136: OK: 8 GPUs found
+Host 10.2.72.136: OK: numactl exists
 ```
 
 もしGPUが部分的に認識されていない場合、該当するノードにssh でログインし、MIG を無効化してみてください。例えば、ノード `10.2.72.136` で GPU ID 2 が認識されない場合、以下のコマンドを実行してみてください（要 sudo）
