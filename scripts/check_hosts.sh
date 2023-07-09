@@ -8,16 +8,6 @@ if [ $# -ne 1 ]; then
     exit 1
 fi
 
-# function cmd_check(){
-#   cmd=$1
-#   stat=$(which ${cmd}; echo $?)
-#   if [ "$stat" = "1" ]; then
-#     echo "Warning: ${cmd} not found"
-#   else
-#     echo "OK: ${cmd} exists"
-#   fi
-# }
-
 function cmd_check(){
   ip=$1
   cmd=$2
@@ -28,16 +18,6 @@ function cmd_check(){
     echo "Host $ip: OK: $cmd exists"
   fi
 }
-
-# function numactl_check(){
-#   ip=$1
-#   stat=$(ssh $ip which numactl | grep -v "not found")
-#   if [ -z "$stat" ]; then
-#     echo "Host $ip: Warning: numactl not found"
-#   else
-#     echo "Host $ip: OK: numactl exists"
-#   fi
-# }
 
 function num_gpus(){
   ip=$1

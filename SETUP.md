@@ -61,6 +61,14 @@
 
 Setup 完了です。
 
+## conda でのセットアップ（非推奨）
+
+注意：過去のテスト用に構築された環境のため、新しく環境構築する場合は、上記の pyenv + venv を使ってください。
+
+```bash
+source /model/share/miniforge/etc/profile.d/conda.sh
+conda activate megatron-deepspeed
+```
 
 ## Multi-Node 学習のための準備
 
@@ -94,11 +102,13 @@ Host 10.2.72.136
 
 mdx に login した状態で `ssh <node-name>`で接続できることを確認してください。
 
+
 ### mpirun
 
 [このファイル](https://github.com/llm-jp/Megatron-DeepSpeed/blob/hpc/fujii/deepspeed-multi-node/scripts/mpirun/345m_dp16.sh)を参考にしてください。
 
 `-H `には、使用するノードの名前を記入してください。(自分は、`.ssh/config` の HostName と Host名が同じなので)
+なお、ノードの名前をスクリプトに記述する代わりに、hostfile を使う方法もあります。詳細は下記の Appendix を参照してください。
 
 ```bash
 mpirun -np $WORLD_SIZE --npernode $GPUS_PER_NODE \
@@ -111,7 +121,8 @@ mpirun -np $WORLD_SIZE --npernode $GPUS_PER_NODE \
 
 上の場合では、`10.2.72.135`が今ログインしているnodeです。
 
-`10.2.72.135`にて、以下のようにjobを投げます
+
+`10.2.72.135`にて、以下のようにjobを投げます。
 
 ```bash
 bash scripts/mpirun/345m_dp16.sh
@@ -121,6 +132,40 @@ bash scripts/mpirun/345m_dp16.sh
 
 ## Appendix
 
+### hostfile (推奨)
+
+上記の `mpirun` コマンドの `-H` オプションでノードの名前を並べてスクリプトに記述する代わりに、ノードの名前を `hostfile` に記述して、`-hostfile` オプションで読み込ませることもできます。
+
+```text
+10.2.72.135 slots=8
+10.2.72.136 slots=8
+```
+
+```bash
+mpirun -np $WORLD_SIZE --npernode $GPUS_PER_NODE \
+  -hostfile hostfile \
+  -x MASTER_ADDR=10.2.72.135 \
+```
+
+### 実行前計算ノードチェック
+
+マルチノード実行前に、各計算ノードに正常にGPUデバイスが認識されているか、numactl がインストールされているかどうか、hostfile と `check_hosts.sh` スクリプトでチェックすることができます。
+
+```bash
+bash scripts/check_hosts.sh hostfile
+```
+
+もしGPUが部分的に認識されていない場合、該当するノードにssh でログインし、MIG を無効化してみてください。例えば、ノード `10.2.72.136` で GPU ID 2 が認識されない場合、以下のコマンドを実行してみてください（要 sudo）
+
+```bash
+ssh 10.2.72.136
+sudo nvidia-smi -i 2 -mig 0
+```
+
+また、新しくノードをデプロイしたままでは numactl がインストールされていないため、 `Host 10.2.72.136: Warning: numactl not found. Please install if necessary` と警告が出る場合がありますが、これは conda 環境でのみ必要であり、推奨されている pyenv + env では不要なので無視してください。
+
+
+### python 環境設定
 
 pyenv を install する前に以下のようなコマンドを打ち
 
@@ -138,3 +183,4 @@ export PIP_CACHE_DIR="<user-dir>/.cache/pip"
 ```
 
 とすることで、cache作成先を変えることができます。
+
