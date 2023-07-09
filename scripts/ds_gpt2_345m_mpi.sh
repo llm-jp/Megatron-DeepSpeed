@@ -1,7 +1,11 @@
-#source .env/bin/activate
+#! /bin/bash
 
+# Runs the "345M" parameter model
+
+# Load conda environment (TODO: to be replaced with pyenv)
 source /model/share/miniforge/etc/profile.d/conda.sh
 conda activate megatron-deepspeed
+# source /model/hpc-team/Megatron-DeepSpeed/.env/bin/activate
 
 export OMP_NUM_THREADS=9
 
@@ -67,21 +71,21 @@ if [ -z "$NUM_NODES" ] || [ -z "$NUM_GPUS_PER_NODE" ] || [ -z "$HOSTFILE" ] || [
     usage
 fi
 
-if [ ! e "$HOSTFILE" ]; then
+if [ ! -e "$HOSTFILE" ]; then
   $echo "Error: Hostfile '$HOSTFILE' not found"
   exit 1
 fi
 
 
-NUM_GPUS=$((${NUM_NODES} * ${NUM_GPUS_PER_NODE}))
+TOTAL_NUM_GPUS=$((${NUM_NODES} * ${NUM_GPUS_PER_NODE}))
 NUMACTL_SETUP_SCRIPT=./scripts/numactl/setup_${NUM_GPUS_PER_NODE}.sh
 
-DP_SIZE=$((${NUM_GPUS} / (${PP_SIZE} * ${TP_SIZE})))
+DP_SIZE=$((${TOTAL_NUM_GPUS} / (${PP_SIZE} * ${TP_SIZE})))
 
 # Print the input parameters
 echo "Number of nodes: $NUM_NODES"
 echo "Number of GPUs per node: $NUM_GPUS_PER_NODE"
-echo "Number of total GPUs: $NUM_GPUS"
+echo "Number of total GPUs: $TOTAL_NUM_GPUS"
 echo "Hostfile path: $HOSTFILE"
 echo "numactl setup script: $NUMACTL_SETUP_SCRIPT"
 echo "Pipeline parallel size: $PP_SIZE"
@@ -90,7 +94,7 @@ echo "Data parallel size: $DP_SIZE"
 
 
 # Dataset path & checkpoint path
-DATASET_PATH=dataset/BookCorpusDataset_text_document
+DATA_PATH=dataset/BookCorpusDataset_text_document
 CHECKPOINT_PATH=checkpoints/gpt2_345m/ds_${NUM_GPUS_PER_NODE}gpu
 mkdir -p ${CHECKPOINT_PATH}
 
@@ -112,7 +116,7 @@ GLOBAL_BATCH_SIZE=$((MICRO_BATCHSIZE * DP_SIZE))
 SEQ_LENGTH=1024
 MAX_POSITION_EMBEDDINGS=1024
 
-TRAINING_ITERATIONS=50
+TRAINING_ITERATIONS=10
 SAVE_INTERVAL=10
 LR_DECAY_ITERATIONS=320000
 
@@ -127,7 +131,7 @@ ZERO_STAGE=1
 # for debug
 export CUDA_LAUNCH_BLOCKING=1
 
-mpiexec -n $NUM_GPUS -npernode $NUM_GPUS_PER_NODE -machinefile "$HOSTFILE" \
+mpiexec -n $TOTAL_NUM_GPUS -npernode $NUM_GPUS_PER_NODE -machinefile "$HOSTFILE" \
 	-x PATH -x LD_LIBRARY_PATH -x OMP_NUM_THREADS --report-bindings --map-by slot:PE=$OMP_NUM_THREADS --bind-to core  \
 	"$NUMACTL_SETUP_SCRIPT" python pretrain_gpt.py \
   --tensor-model-parallel-size ${TP_SIZE} \
@@ -142,7 +146,7 @@ mpiexec -n $NUM_GPUS -npernode $NUM_GPUS_PER_NODE -machinefile "$HOSTFILE" \
   --train-iters ${TRAINING_ITERATIONS} \
   --save-interval ${SAVE_INTERVAL} \
   --lr-decay-iters ${LR_DECAY_ITERATIONS} \
-  --data-path ${DATASET_PATH} \
+  --data-path ${DATA_PATH} \
   --vocab-file ${VOCAB_PATH} \
   --merge-file ${MERGE_PATH} \
   --data-impl mmap \
@@ -167,4 +171,5 @@ mpiexec -n $NUM_GPUS -npernode $NUM_GPUS_PER_NODE -machinefile "$HOSTFILE" \
   --deepspeed \
   --deepspeed_config ${CONFIG_FILE} \
   --zero-stage ${ZERO_STAGE} \
-  --deepspeed-activation-checkpointing
+  --deepspeed-activation-checkpointing \
+  --wandb-name "gpt2_345m_${NUM_NODES}node_dp${TOTAL_NUM_GPUS}-mpirun"

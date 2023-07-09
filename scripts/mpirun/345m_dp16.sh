@@ -4,7 +4,7 @@
 
 # distributed settings
 GPUS_PER_NODE=8
-NNODES=2
+NNODES=8
 WORLD_SIZE=$(($GPUS_PER_NODE * $NNODES))
 
 # load virtualenv
@@ -16,11 +16,17 @@ CHECKPOINT_PATH=checkpoints/gpt2_345m/2node-16gpu-mpirun
 
 mkdir -p $CHECKPOINT_PATH
 
+HOSTFILE=hostfile
+if [ ! -e "$HOSTFILE" ]; then
+  $echo "Error: Hostfile '$HOSTFILE' not found"
+  exit 1
+fi
+
 
 # Open MPI training
 
 mpirun -np $WORLD_SIZE --npernode $GPUS_PER_NODE \
-  -H 10.2.72.135:8,10.2.72.136:8 \
+  -hostfile ${HOSTFILE} \
   -x MASTER_ADDR=10.2.72.135 \
   -x MASTER_PORT=16500 \
   -bind-to none -map-by slot \
@@ -30,15 +36,15 @@ mpirun -np $WORLD_SIZE --npernode $GPUS_PER_NODE \
   --num-layers 24 \
   --hidden-size 1024 \
   --num-attention-heads 16 \
-  --micro-batch-size 8 \
-  --global-batch-size 128 \
+  --micro-batch-size 4 \
+  --global-batch-size 512 \
   --seq-length 1024 \
   --max-position-embeddings 1024 \
   --train-iters 500000 \
   --lr-decay-iters 320000 \
-  --save $CHECKPOINT_PATH \
-  --load $CHECKPOINT_PATH \
-  --data-path $DATA_PATH \
+  --save ${CHECKPOINT_PATH} \
+  --load ${CHECKPOINT_PATH} \
+  --data-path ${DATA_PATH} \
   --vocab-file dataset/gpt2-vocab.json \
   --merge-file dataset/gpt2-merges.txt \
   --data-impl mmap \
