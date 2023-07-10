@@ -40,8 +40,6 @@ function check_host(){
   else
     echo "Host $ip: Error - Expected $expected_slots GPUs, but found $gpu_count"
   fi
-  # numactl がホストでサポートされているか確認（conda を使わない場合は無視して良い）
-  cmd_check $ip numactl
 }
 
 # ホストファイルを1行ずつ読み込む

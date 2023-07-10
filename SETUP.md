@@ -61,15 +61,6 @@
 
 Setup 完了です。
 
-## conda でのセットアップ（非推奨）
-
-注意：過去のテスト用に構築された環境のため、新しく環境構築する場合は、上記の pyenv + venv を使ってください。
-
-```bash
-source /model/share/miniforge/etc/profile.d/conda.sh
-conda activate megatron-deepspeed
-```
-
 ## Multi-Node 学習のための準備
 
 ### ssh config
@@ -132,20 +123,31 @@ bash scripts/mpirun/345m_dp16.sh
 
 ### mpirun: カスタマイズ引数付
 
-`345m_custom.sh` スクリプトを使うことにより、ノード数、ノードあたりGPU数、ホストファイルをコマンドラインから指定できるようになります。（その他、パイプライン並列、テンソル並列の引数も用意されていますが、現状では反映されず、将来的に利用可能になります）
+`run_custom.sh` スクリプトを使うことにより、モデルサイズ、ノード数、ノードあたりGPU数、ホストファイルをコマンドラインから指定できるようになります。（その他、パイプライン並列、テンソル並列の引数も用意されていますが、現状では反映されず、将来的に利用可能になります）
 
 
 ```bash
-bash scripts/mpirun/345m_custom.sh -h
-Usage: scripts/mpirun/345m_custom.sh [-n|--nodes <number of nodes>] [-g|--gpus <number of GPUs per node>] [-f|--hostfile <hostfile path>] [--pp <Pipeline parallel size>] [--tp <Tensor parallel size>]
+bash scripts/mpirun/run_custom.sh -h
+Usage: scripts/mpirun/run_custom.sh [-n|--nodes <number of nodes>] [-g|--gpus <number of GPUs per node>] [-f|--hostfile <hostfile path>] [-m|--model <model size>] [--pp <Pipeline parallel size>] [--tp <Tensor parallel size>]
 ```
 
-下の例では、１ノードあたり８GPUで８ノード実行（合計64GPU）し、ホストファイルは `hostfile` パイプライン並列、テンソル並列なし（並列数: 1）で実行します。
+下の例では、１ノードあたり８GPUで８ノード実行（合計64GPU）し、モデルサイズは 350M、ホストファイルは `hostfile` パイプライン並列、テンソル並列なし（並列数: 1）で実行します。
 
 ```bash
 source .env/bin/activate
-bash scripts/mpirun/345m_custom.sh -n 8 -g 8 -f hostfile --pp 1 --tp 1
+bash scripts/mpirun/run_custom.sh -n 8 -g 8 -m 350m -f hostfile --pp 1 --tp 1
 ```
+
+使用できるモデルサイズと、設定されるハイパーパラメータ（`NUM_LAYERS`, `HIDDEN_SIZE`, `NUM_ATTENTION_HEADS`）は下の通りです。これ以外のパラメータ数を指定するとエラーになります。
+
+| パラメータ数 | NUM_LAYERS | HIDDEN_SIZE | NUM_ATTENTION_HEADS |
+| ---------- | ---------- | ----------- | ------------------- |
+| 350m       | 24         | 1024        | 16                  |
+| 760m       | 24         | 1536        | 16                  |
+| 800m       | 16         | 2048        | 8                   |
+| 1.3b       | 24         | 2048        | 16                  |
+| 2.7b       | 32         | 2560        | 32                  |
+
 
 
 ## Appendix
@@ -167,26 +169,21 @@ mpirun -np $WORLD_SIZE --npernode $GPUS_PER_NODE \
 
 ### 実行前計算ノードチェック
 
-マルチノード実行前に、各計算ノードに正常にGPUデバイスが認識されているか、numactl がインストールされているかどうか、hostfile と `check_hosts.sh` スクリプトでチェックすることができます。
-実行例:
+マルチノード実行前に、各計算ノードに正常にGPUデバイスが認識されているか、hostfile と `check_hosts.sh` スクリプトでチェックすることができます。
 
 ```bash
 bash scripts/check_hosts.sh hostfile
 
 Host 10.2.72.135: OK: 8 GPUs found
-Host 10.2.72.135: OK: numactl exists
 Host 10.2.72.136: OK: 8 GPUs found
-Host 10.2.72.136: OK: numactl exists
 ```
 
-もしGPUが部分的に認識されていない場合、該当するノードにssh でログインし、MIG を無効化してみてください。例えば、ノード `10.2.72.136` で GPU ID 2 が認識されない場合、以下のコマンドを実行してみてください（要 sudo）
+もしGPUが部分的に認識されていない場合、該当するノードにssh でログインし、MIG を無効化してみてください。例えばノード `10.2.72.136` で GPU ID 2 が認識されない場合、以下のコマンドを実行してみてください（要 sudo）
 
 ```bash
 ssh 10.2.72.136
 sudo nvidia-smi -i 2 -mig 0
 ```
-
-また、新しくノードをデプロイしたままでは numactl がインストールされていないため、 `Host 10.2.72.136: Warning: numactl not found. Please install if necessary` と警告が出る場合がありますが、これは conda 環境でのみ必要であり、推奨されている pyenv + env では不要なので無視してください。
 
 
 ### python 環境設定

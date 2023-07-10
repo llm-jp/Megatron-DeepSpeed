@@ -1,6 +1,6 @@
 #! /bin/bash
 
-# Runs the "345M" parameter model
+# Runs the GPT2-based parameter model
 
 # Initialize variables
 NNODES=""
@@ -8,10 +8,11 @@ GPUS_PER_NODE=""
 HOSTFILE=""
 PP_SIZE=""
 TP_SIZE=""
+MODEL_SIZE=""
 
 # Function to display usage
 usage() {
-  echo "Usage: $0 [-n|--nodes <number of nodes>] [-g|--gpus <number of GPUs per node>] [-f|--hostfile <hostfile path>] [--pp <Pipeline parallel size>] [--tp <Tensor parallel size>]"
+  echo "Usage: $0 [-n|--nodes <number of nodes>] [-g|--gpus <number of GPUs per node>] [-f|--hostfile <hostfile path>] [-m|--model <model size>] [--pp <Pipeline parallel size>] [--tp <Tensor parallel size>]"
   exit 1
 }
 
@@ -31,6 +32,10 @@ while (( "$#" )); do
       ;;
     -f|--hostfile)
       HOSTFILE="$2"
+      shift 2
+      ;;
+    -m|--model)
+      MODEL_SIZE="$2"
       shift 2
       ;;
     --pp)
@@ -57,7 +62,7 @@ while (( "$#" )); do
 done
 
 # Check if all parameters are set
-if [ -z "$NNODES" ] || [ -z "$GPUS_PER_NODE" ] || [ -z "$HOSTFILE" ] || [ -z "$PP_SIZE" ] || [ -z "$TP_SIZE" ]; then
+if [ -z "$NNODES" ] || [ -z "$GPUS_PER_NODE" ] || [ -z "$HOSTFILE" ] || [ -z "$MODEL_SIZE" ] || [ -z "$PP_SIZE" ] || [ -z "$TP_SIZE" ]; then
     echo "Error: Not all parameters are set. Please check your input."
     usage
 fi
@@ -66,6 +71,38 @@ if [ ! -e "$HOSTFILE" ]; then
   $echo "Error: Hostfile '$HOSTFILE' not found"
   exit 1
 fi
+
+case "$MODEL_SIZE" in
+  350m)
+    NUM_LAYERS=24
+    HIDDEN_SIZE=1024
+    NUM_ATTN_HEADS=16
+    ;;
+  760m)
+    NUM_LAYERS=24
+    HIDDEN_SIZE=1536
+    NUM_ATTN_HEADS=16
+    ;;
+  800m)
+    NUM_LAYERS=16
+    HIDDEN_SIZE=2048
+    NUM_ATTN_HEADS=8
+    ;;
+  1.3b)
+    NUM_LAYERS=24
+    HIDDEN_SIZE=2048
+    NUM_ATTN_HEADS=16
+    ;;
+  2.7b)
+    NUM_LAYERS=32
+    HIDDEN_SIZE=2560
+    NUM_ATTN_HEADS=32
+    ;;
+  *)
+    echo "Error: Unsupported model size $MODEL_SIZE, must be 350m, 760m, 800m, 1.3b or 2.7b"
+    exit 1
+    ;;
+esac
 
 
 WORLD_SIZE=$((${NNODES} * ${GPUS_PER_NODE}))
@@ -82,43 +119,49 @@ echo "numactl setup script: $NUMACTL_SETUP_SCRIPT"
 echo "Pipeline parallel size: $PP_SIZE"
 echo "Tensor parallel size: $TP_SIZE"
 echo "Data parallel size: $DP_SIZE"
+echo "Number of layers: $NUM_LAYERS"
+echo "Hidden layer size: $HIDDEN_SIZE"
+echo "Number of attention heads: $NUM_ATTN_HEADS"
 
 # load virtualenv
 source /model/hpc-team/Megatron-DeepSpeed/.env/bin/activate
 
 # dataset, checkpoint path
 DATA_PATH=dataset/BookCorpusDataset_text_document
-CHECKPOINT_PATH=checkpoints/gpt2_345m/2node-16gpu-mpirun
+CHECKPOINT_PATH="checkpoints/gpt2_${MODEL_SIZE}/${NNODES}node-${WORLD_SIZE}gpu-mpirun"
 
 mkdir -p $CHECKPOINT_PATH
 
-HOSTFILE=hostfile
-if [ ! -e "$HOSTFILE" ]; then
-  $echo "Error: Hostfile '$HOSTFILE' not found"
-  exit 1
-fi
-
 
 # Open MPI training
+RUN_NAME="gpt2_${MODEL_SIZE}_${NNODES}n_${WORLD_SIZE}g-${NUM_LAYERS}_${HIDDEN_SIZE}_${NUM_ATTN_HEADS}-dp${DP_SIZE}-tp${TP_SIZE}-pp${PP_SIZE}-mpirun"
+DATETIME=$(date +"%Y%m%d_%H%M%S")
+mkdir -p logs
+OUT_LOG="logs/${RUN_NAME}_${DATETIME}.log"
 
-# --train-iters 500000 \
+echo "Name: ${RUN_NAME}"
+echo "Output log: ${OUT_LOG}"
+
+MASTER_ADDR=$(head -n 1 hostfile_1 | cut -d' ' -f1)
 
 mpirun -np $WORLD_SIZE --npernode $GPUS_PER_NODE \
   -hostfile ${HOSTFILE} \
-  -x MASTER_ADDR=10.2.72.135 \
+  -x MASTER_ADDR="$MASTER_ADDR" \
   -x MASTER_PORT=16500 \
   -bind-to none -map-by slot \
   -x NCCL_DEBUG=INFO  -x PATH \
   -mca pml ob1 -mca btl ^openib \
   python pretrain_gpt.py \
-  --num-layers 24 \
-  --hidden-size 1024 \
-  --num-attention-heads 16 \
+  --tensor-model-parallel-size $TP_SIZE \
+  --pipeline-model-parallel-size $PP_SIZE \
+  --num-layers $NUM_LAYERS \
+  --hidden-size $HIDDEN_SIZE \
+  --num-attention-heads $NUM_ATTN_HEADS \
   --micro-batch-size 4 \
   --global-batch-size 512 \
   --seq-length 1024 \
   --max-position-embeddings 1024 \
-  --train-iters 100 \
+  --train-iters 10 \
   --lr-decay-iters 320000 \
   --save ${CHECKPOINT_PATH} \
   --load ${CHECKPOINT_PATH} \
@@ -143,4 +186,4 @@ mpirun -np $WORLD_SIZE --npernode $GPUS_PER_NODE \
   --use-mpi \
   --log-batch-size-to-tensorboard \
   --log-validation-ppl-to-tensorboard \
-  --wandb-name "gpt2_345m_${NNODES}node_dp${DP_SIZE}-mpirun"
+  --wandb-name "${RUN_NAME}" 2>&1 | tee "${OUT_LOG}"
