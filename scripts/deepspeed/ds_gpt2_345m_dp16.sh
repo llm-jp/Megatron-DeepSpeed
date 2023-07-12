@@ -46,6 +46,7 @@ SEED=1234
 CONFIG_FILE=scripts/deepspeed/ds_config_gpt2_345m_dp${DP_SIZE}.json
 ZERO_STAGE=1
 
+export NCCL_DEBUG=INFO
 
 # Run Command
 deepspeed --num_nodes ${NUM_NODES} \
