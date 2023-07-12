@@ -147,7 +147,9 @@ bash scripts/mpirun/run_custom.sh -n 8 -g 8 -m 350m -f hostfile --pp 1 --tp 1
 | 800m       | 16         | 2048        | 8                   |
 | 1.3b       | 24         | 2048        | 16                  |
 | 2.7b       | 32         | 2560        | 32                  |
-
+| 6.7b       | 32         | 4096        | 32                  |
+| 13b        | 40         | 5120        | 40                  |
+| 20b        | 44         | 6144        | 64                  |
 
 
 ## Appendix

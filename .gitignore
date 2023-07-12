@@ -8,7 +8,7 @@ apex/
 wandb/
 tensorboard/
 /logs/
-checkpoints/gpt2_345m/
+checkpoints/*
 
 # dataset
 dataset/BookCorpusDataset*

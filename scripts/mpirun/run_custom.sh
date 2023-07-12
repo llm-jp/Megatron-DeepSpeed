@@ -98,8 +98,23 @@ case "$MODEL_SIZE" in
     HIDDEN_SIZE=2560
     NUM_ATTN_HEADS=32
     ;;
+  6.7b)
+    NUM_LAYERS=32
+    HIDDEN_SIZE=4096
+    NUM_ATTN_HEADS=32
+    ;;
+  13b)
+    NUM_LAYERS=40
+    HIDDEN_SIZE=5120
+    NUM_ATTN_HEADS=40
+    ;;
+  20b)
+    NUM_LAYERS=44
+    HIDDEN_SIZE=6144
+    NUM_ATTN_HEADS=64
+    ;;
   *)
-    echo "Error: Unsupported model size $MODEL_SIZE, must be 350m, 760m, 800m, 1.3b or 2.7b"
+    echo "Error: Unsupported model size $MODEL_SIZE, must be 350m, 760m, 800m, 1.3b, 2.7b, 6.7b, 13b or 20b"
     exit 1
     ;;
 esac
@@ -130,7 +145,8 @@ source /model/hpc-team/Megatron-DeepSpeed/.env/bin/activate
 DATA_PATH=dataset/BookCorpusDataset_text_document
 CHECKPOINT_PATH="checkpoints/gpt2_${MODEL_SIZE}/${NNODES}node-${WORLD_SIZE}gpu-mpirun"
 
-mkdir -p $CHECKPOINT_PATH
+rm -rf "$CHECKPOINT_PATH"
+mkdir -p "$CHECKPOINT_PATH"
 
 
 # Open MPI training
