@@ -113,8 +113,13 @@ case "$MODEL_SIZE" in
     HIDDEN_SIZE=6144
     NUM_ATTN_HEADS=64
     ;;
+  26b)
+    NUM_LAYERS=48
+    HIDDEN_SIZE=6144
+    NUM_ATTN_HEADS=64
+    ;;
   *)
-    echo "Error: Unsupported model size $MODEL_SIZE, must be 350m, 760m, 800m, 1.3b, 2.7b, 6.7b, 13b or 20b"
+    echo "Error: Unsupported model size $MODEL_SIZE, must be 350m, 760m, 800m, 1.3b, 2.7b, 6.7b, 13b, 20b or 26b"
     exit 1
     ;;
 esac
