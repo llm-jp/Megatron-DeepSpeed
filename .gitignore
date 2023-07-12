@@ -1,6 +1,9 @@
 __pycache__
 .python-version
 
+# project specific
+output/
+
 # dependncies
 apex/
 
