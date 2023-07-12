@@ -158,7 +158,7 @@ OUT_LOG="logs/${RUN_NAME}_${DATETIME}.log"
 echo "Name: ${RUN_NAME}"
 echo "Output log: ${OUT_LOG}"
 
-MASTER_ADDR=$(head -n 1 hostfile_1 | cut -d' ' -f1)
+MASTER_ADDR=$(head -n 1 $HOSTFILE | cut -d' ' -f1)
 
 mpirun -np $WORLD_SIZE --npernode $GPUS_PER_NODE \
   -hostfile ${HOSTFILE} \
