@@ -1,4 +1,4 @@
-#!/bin/bash
+#! /bin/bash
 
 # Runs the "345M" parameter model
 
@@ -17,16 +17,12 @@ CHECKPOINT_PATH=checkpoints/gpt2_345m/1node-8gpu
 
 mkdir -p $CHECKPOINT_PATH
 
-DISTRIBUTED_ARGS="
-    --nproc_per_node $GPUS_PER_NODE \
-    --nnodes $NNODES \
-    --node_rank $NODE_RANK \
-    --master_addr $MASTER_ADDR \
-    --master_port $MASTER_PORT
-"
+DISTRIBUTED_ARGS="--nproc_per_node $GPUS_PER_NODE --nnodes $NNODES --node_rank $NODE_RANK --master_addr $MASTER_ADDR --master_port $MASTER_PORT"
 
 python -m torch.distributed.launch $DISTRIBUTED_ARGS \
   pretrain_gpt.py \
+  --tensor-model-parallel-size 2 \
+  --pipeline-model-parallel-size 2 \
   --num-layers 24 \
   --hidden-size 1024 \
   --num-attention-heads 16 \
@@ -58,4 +54,4 @@ python -m torch.distributed.launch $DISTRIBUTED_ARGS \
   --fp16 \
   --log-batch-size-to-tensorboard \
   --log-validation-ppl-to-tensorboard \
-  --wandb-name "gpt2_345m_1node_8gpu-torch-distributed"
+  --wandb-name "gpt2_345m_1node_dp2_tp2_pp2-torch-distributed"

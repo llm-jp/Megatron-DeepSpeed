@@ -59,7 +59,16 @@ def parse_args(extra_args_provider=None, ignore_unknown_args=False):
     # helper argument to set deepspeed pipeline parallel or not
     args.ds_pipeline_enabled = not args.no_pipeline_parallel
 
-    # Args from environment
+    # Distributed args.
+    if args.use_mpi:
+        global_rank = int(os.getenv('OMPI_COMM_WORLD_RANK', 0))
+        local_rank = int(os.getenv('OMPI_COMM_WORLD_LOCAL_RANK', 0))
+        world_size = int(os.getenv('OMPI_COMM_WORLD_SIZE', 1))
+
+        os.environ['RANK'] = str(global_rank)
+        os.environ['LOCAL_RANK'] = str(local_rank)
+        os.environ['WORLD_SIZE'] = str(world_size)
+
     args.rank = int(os.getenv('RANK', '0'))
     args.world_size = int(os.getenv("WORLD_SIZE", '1'))
 
@@ -828,6 +837,21 @@ def _add_training_args(parser):
                        'training if SIGTERM is received')
     group.add_argument('--tensorboard-dir', type=str, default=None,
                        help='Write TensorBoard logs to this directory.')
+    group.add_argument(
+        "--wandb-entity",
+        type=str,
+        default=None,
+    )
+    group.add_argument(
+        "--wandb-name",
+        type=str,
+        default=None,
+    )
+    group.add_argument(
+        "--wandb-id",
+        type=str,
+        default=None,
+    )
     group.add_argument('--no-masked-softmax-fusion',
                        action='store_false',
                        help='Disable fusion of query_key_value scaling, '
@@ -1090,6 +1114,8 @@ def _add_distributed_args(parser):
                        default=False, help='If set, use custom-built ring exchange '
                        'for p2p communications. Note that this option will require '
                        'a custom built image that support ring-exchange p2p.')
+    group.add_argument('--local-rank', type=int, default=None,
+                       help='local rank passed from distributed launcher.')
     group.add_argument('--local_rank', type=int, default=None,
                        help='local rank passed from distributed launcher.')
     group.add_argument('--lazy-mpu-init', type=bool, required=False,
@@ -1097,10 +1123,12 @@ def _add_distributed_args(parser):
                        'skips DDP initialization and returns function to '
                        'complete it instead.Also turns on '
                        '--use-cpu-initialization flag. This is for '
-                       'external DDP manager.' )
+                       'external DDP manager.')
     group.add_argument('--use-cpu-initialization', action='store_true',
                        default=None, help='If set, affine parallel weights '
-                       'initialization uses CPU' )
+                       'initialization uses CPU')
+    group.add_argument('--use-mpi', action='store_true', default=False,
+                       help='Use MPI for distributed training.')
     group.add_argument('--empty-unused-memory-level', default=0, type=int,
                        choices=[0, 1, 2],
                        help='Call torch.cuda.empty_cache() each iteration '
@@ -1113,7 +1141,6 @@ def _add_distributed_args(parser):
                        'affects the encoder embedding.)')
     group.add_argument('--use-distributed-optimizer', action='store_true',
                        help='Use distributed optimizer.')
-
     return parser
 
 
