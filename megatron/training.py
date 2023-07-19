@@ -1436,6 +1436,8 @@ def evaluate_and_print_results(prefix, forward_step_func,
             if args.log_validation_ppl_to_tensorboard:
                 wandb_stats[f'lm-loss-validation/{key}_{data_type}_ppl'] = ppl
             wandb.log(wandb_stats, step=iteration)
+    if process_non_loss_data_func is not None and writer and is_last_rank():
+        process_non_loss_data_func(collected_non_loss_data, iteration, writer)
 
     length = len(string) + 1
     print_rank_last('-' * length)
