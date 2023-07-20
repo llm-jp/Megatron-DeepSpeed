@@ -40,7 +40,7 @@ def build_tokenizer(args):
         assert args.vocab_size is not None
         tokenizer = _NullTokenizer(args.vocab_size)
     elif args.tokenizer_type == 'JapaneseSentencePiece':
-        assert args.vocab_size is not None
+        assert args.vocab_file is not None
         tokenizer = _JapaneseSentencePiece(args.vocab_file)
     else:
         raise NotImplementedError('{} tokenizer is not '
