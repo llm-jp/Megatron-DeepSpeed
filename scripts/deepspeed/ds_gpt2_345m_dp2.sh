@@ -1,12 +1,11 @@
 #!/bin/bash
 
 # Dataset path & checkpoint path
-DATASET_PATH=dataset/BookCorpusDataset_text_document
-CHECKPOINT_PATH=checkpoints/gpt2_345m/deepspeed_1node_8gpus
+DATASET_PATH=dataset/wiki_ja_20230320_train_filtered_text_document
+CHECKPOINT_PATH=checkpoints/gpt2_345m/deepspeed_1node_2gpus
 mkdir -p ${CHECKPOINT_PATH}
 
-VOCAB_PATH=dataset/gpt2-vocab.json
-MERGE_PATH=dataset/gpt2-merges.txt
+VOCAB_PATH=/data/tokenizer/v1_20230628/cc100_ja30K_en20K.symbolRemoved.vocab.reestimated.model
 
 # GPT-2 345M (24-layer, 1024-hidden, 16-heads, 345M parameters)
 NUM_LAYERS=24
@@ -49,6 +48,7 @@ ZERO_STAGE=1
 deepspeed --num_nodes ${NUM_NODES} \
   --num_gpus ${NUM_GPUS_PER_NODE} \
   pretrain_gpt.py \
+  --tokenizer-type 'JapaneseSentencePiece' \
   --tensor-model-parallel-size ${TP_SIZE} \
   --pipeline-model-parallel-size ${PP_SIZE} \
   --num-layers ${NUM_LAYERS} \
@@ -63,13 +63,12 @@ deepspeed --num_nodes ${NUM_NODES} \
   --lr-decay-iters ${LR_DECAY_ITERATIONS} \
   --data-path ${DATASET_PATH} \
   --vocab-file ${VOCAB_PATH} \
-  --merge-file ${MERGE_PATH} \
   --data-impl mmap \
   --split 949,50,1 \
   --save ${CHECKPOINT_PATH} \
   --load ${CHECKPOINT_PATH} \
   --distributed-backend nccl \
-  --override-lr-scheduler \
+  --override-opt_param-scheduler \
   --lr $LR \
   --lr-decay-style cosine \
   --min-lr 1.0e-5 \
