@@ -178,7 +178,10 @@ def loss_func(loss_mask, moe_loss, mos_loss, output_tensor):
     loss = torch.sum(losses.view(-1) * loss_mask) / loss_mask.sum()
     
     # Reduce loss for logging.
+    timers  = get_timers()
+    timers('average_losses_across_data_parallel_group').start()
     averaged_loss = average_losses_across_data_parallel_group([loss])
+    timers('average_losses_across_data_parallel_group').stop()
     if args.mos or args.kd:
         # assert max(args.num_experts) >= 1
         loss = loss + moe_loss + mos_loss
@@ -319,6 +322,7 @@ def git_ds_info():
 
 if __name__ == "__main__":
     git_ds_info()
+    os.makedirs(os.environ.get('TIMER', 'timer'), exist_ok=True)
     pretrain(train_valid_test_datasets_provider,
              model_provider,
              ModelType.encoder_or_decoder,

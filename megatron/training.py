@@ -1118,6 +1118,16 @@ def training_log(loss_dict, total_loss_dict, learning_rate, iteration,
             report_memory_flag = False
         timers.log(timers_to_log, normalizer=args.log_interval)
 
+    timers_to_out = []
+    def add_to_out(name):
+        if name in timers.timers:
+            timers_to_out.append(name)
+    add_to_out('average_losses_across_data_parallel_group')
+    add_to_out('allreduce_for_tp')
+    for name in timers_to_log:
+        add_to_out(name)
+    timers.out(timers_to_out, normalizer=args.log_interval)
+
     return report_memory_flag
 
 

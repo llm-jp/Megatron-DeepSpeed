@@ -15,6 +15,8 @@ from torch.nn.parameter import Parameter
 
 from torch.cuda.amp import custom_fwd, custom_bwd
 
+from megatron import get_timers
+
 from megatron.core.model_parallel_config import ModelParallelConfig
 
 from megatron.core.parallel_state import (
@@ -734,12 +736,15 @@ class RowParallelLinear(torch.nn.Module):
         )
 
         # All-reduce across all the partitions.
+        timers = get_timers()
+        timers('allreduce_for_tp').start()
         if self.sequence_parallel:
             output_ = reduce_scatter_to_sequence_parallel_region(output_parallel)
         elif self.is_expert_without_slicing: # non-expert only tensor-parallelism
             output_ = output_parallel
         else:
             output_ = reduce_from_tensor_model_parallel_region(output_parallel)
+        timers('allreduce_for_tp').stop()
         if not self.skip_bias_add:
             output = output_ + self.bias if self.bias is not None else output_
             output_bias = None
