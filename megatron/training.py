@@ -1120,7 +1120,7 @@ def training_log(loss_dict, total_loss_dict, learning_rate, iteration,
 
     timers_to_out = []
     def add_to_out(name):
-        if name in timers.timers:
+        if name in timers._timers:
             timers_to_out.append(name)
     add_to_out('average_losses_across_data_parallel_group')
     add_to_out('allreduce_for_tp')
