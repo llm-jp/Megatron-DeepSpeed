@@ -206,7 +206,7 @@ def pretrain(train_valid_test_dataset_provider,
             model = [redundancy_clean(model[0], args.deepspeed_config, mpu)]
 
         if args.save and iteration != 0:
-            save_checkpoint(iteration, model, optimizer, opt_param_scheduler)
+            save_checkpoint_and_time(iteration, model, optimizer, opt_param_scheduler)
     else:
         print_rank_0('skipping training (--skip-train is on) ...')
 
@@ -1116,7 +1116,7 @@ def training_log(loss_dict, total_loss_dict, learning_rate, iteration,
             # Report memory after optimizer state has been initialized.
             report_memory('(after {} iterations)'.format(iteration))
             report_memory_flag = False
-        timers.log(timers_to_log, normalizer=args.log_interval)
+        # timers.log(timers_to_log, normalizer=args.log_interval)
 
     timers_to_out = []
     def add_to_out(name):
@@ -1139,7 +1139,7 @@ def save_checkpoint_and_time(iteration, model, optimizer, opt_param_scheduler):
     save_checkpoint(iteration, model, optimizer, opt_param_scheduler)
     timers('save-checkpoint').stop(barrier=True)
     checkpoint_throughput_calculator(model, timers('save-checkpoint').elapsed(reset=False))
-    timers.log(['save-checkpoint'])
+    timers.out(['save-checkpoint'])
 
 
 def train(forward_step_func, model, optimizer, opt_param_scheduler,
