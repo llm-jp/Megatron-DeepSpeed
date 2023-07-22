@@ -9,6 +9,7 @@ import torch
 
 from megatron.core import parallel_state
 from megatron import get_args
+from megatron import get_timers
 
 
 def ensure_divisibility(numerator, denominator):
@@ -49,8 +50,12 @@ def get_model_type(model):
 def get_model_config(model):
     args = get_args()
     if args.deepspeed:
-        return get_attr_wrapped_model(model.module, 'config', allow_none=False)
-    return get_attr_wrapped_model(model, 'config', allow_none=False)
+        config = get_attr_wrapped_model(model.module, 'config', allow_none=False)
+        config.timers = get_timers()
+        return config
+    config = get_attr_wrapped_model(model, 'config', allow_none=False)
+    config.timers = get_timers()
+    return config
 
 class GlobalMemoryBuffer:
     """Global buffer to avoid dynamic memory allocations.
