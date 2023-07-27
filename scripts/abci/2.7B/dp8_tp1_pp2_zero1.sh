@@ -16,17 +16,18 @@ module load hpcx/2.12
 cd /home/acf15649kv/llm-jp/Megatron-DeepSpeed
 source .env/bin/activate
 
-## GPT-3 1.3B
-model_size=1.3
+## GPT-3 2.7B
+model_size=2.7
 
-num_layers=24
-hidden_size=2048
-num_attn_heads=16
+num_layers=32
+hidden_size=2560
+num_attn_heads=32
 
 global_batch_size=512
-lr=2.0e-4
+
+lr=1.6e-4
 min_lr=1.0e-6
-init_std=0.013
+init_std=0.011
 
 sequence_length=2048
 
@@ -69,7 +70,7 @@ mp_size=1 # tensor model parallel size
 ## Pipeline parallelism. To disable PP, set pp_size to 1 and no_pp to true.
 ## Note that currently both curriculum learning and random-LTD are NOT
 ## compatible with pipeline parallelism.
-pp_size=1
+pp_size=2
 no_pp="false"
 
 ## ZeRO-based data parallelism, stage=0 will disable ZeRO

@@ -70,10 +70,10 @@ mp_size=1 # tensor model parallel size
 ## Note that currently both curriculum learning and random-LTD are NOT
 ## compatible with pipeline parallelism.
 pp_size=1
-no_pp="false"
+no_pp="true"
 
 ## ZeRO-based data parallelism, stage=0 will disable ZeRO
-zero_stage=1
+zero_stage=3
 
 ## Total number of GPUs
 num_gpus_pernode=8

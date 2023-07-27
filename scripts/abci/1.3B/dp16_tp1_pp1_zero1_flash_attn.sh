@@ -87,7 +87,7 @@ dp_size=$((${num_gpus} / ${pp_size} / ${mp_size}))
 ## Make sure that batch_size <= global_batch_size*pp_size*mp_size/num_gpus
 ## Reduce it manually if GPU OOM
 # batch_size=$(( ${global_batch_size} / ${dp_size} ))
-batch_size=1
+batch_size=2
 ###############################################################################
 ### Misc configs
 log_interval=1
@@ -195,6 +195,7 @@ megatron_options=" \
     --load ${checkpoint_path} \
     --save ${checkpoint_path} \
     --no-async-tensor-model-parallel-allreduce \
+    --use-flash-attn \
     --tensorboard-queue-size 1 \
     --log-timers-to-tensorboard \
     --log-batch-size-to-tensorboard \
@@ -262,6 +263,6 @@ mpirun -np $num_gpus \
   python pretrain_gpt.py \
   ${megatron_options} \
   --use-mpi \
-  --wandb-name "mpirun-${jobname}" \
+  --wandb-name "mpirun-flash-attn-${jobname}" \
   ${data_options} \
   ${deepspeed_options}

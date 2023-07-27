@@ -1,5 +1,5 @@
 #!/bin/bash
-#$ -l rt_AF=2
+#$ -l rt_AF=4
 #$ -l h_rt=0:30:00
 #$ -j y
 #$ -o outputs/
@@ -16,17 +16,18 @@ module load hpcx/2.12
 cd /home/acf15649kv/llm-jp/Megatron-DeepSpeed
 source .env/bin/activate
 
-## GPT-3 1.3B
-model_size=1.3
+## GPT-3 30B
+model_size=30
 
-num_layers=24
-hidden_size=2048
-num_attn_heads=16
+num_layers=48
+hidden_size=7168
+num_attn_heads=56
 
-global_batch_size=512
-lr=2.0e-4
+global_batch_size=1536
+
+lr=0.8e-4
 min_lr=1.0e-6
-init_std=0.013
+init_std=0.007
 
 sequence_length=2048
 
@@ -64,12 +65,12 @@ lr_decay_style="cosine"
 ###############################################################################
 ### Parallelism configs
 ## Model parallelism, 1 is no MP
-mp_size=1 # tensor model parallel size
+mp_size=8 # tensor model parallel size
 
 ## Pipeline parallelism. To disable PP, set pp_size to 1 and no_pp to true.
 ## Note that currently both curriculum learning and random-LTD are NOT
 ## compatible with pipeline parallelism.
-pp_size=1
+pp_size=4
 no_pp="false"
 
 ## ZeRO-based data parallelism, stage=0 will disable ZeRO
@@ -195,6 +196,7 @@ megatron_options=" \
     --load ${checkpoint_path} \
     --save ${checkpoint_path} \
     --no-async-tensor-model-parallel-allreduce \
+    --use-flash-attn \
     --tensorboard-queue-size 1 \
     --log-timers-to-tensorboard \
     --log-batch-size-to-tensorboard \
