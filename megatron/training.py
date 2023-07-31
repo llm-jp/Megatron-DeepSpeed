@@ -1079,6 +1079,7 @@ def training_log(loss_dict, total_loss_dict, learning_rate, iteration,
         wandb_stats["stats/samples_per_sec_per_replica"] = samples_per_sec_per_replica
         wandb_stats["stats/tokens_per_sec"] = tokens_per_sec
         wandb_stats["stats/tokens_per_sec_per_replica"] = tokens_per_sec_per_replica
+        wandb_stats["stats/est_days_260B_tokens"] = (260 * 1000 * 1000 * 1000) / (tokens_per_sec * 60 * 60 * 24)
 
         # only the last rank process has a non-None _GLOBAL_TENSORBOARD_WRITER
         if wandb_writer and is_last_rank():
