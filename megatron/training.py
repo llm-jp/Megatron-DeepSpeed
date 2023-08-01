@@ -815,7 +815,19 @@ def training_log(loss_dict, total_loss_dict, learning_rate, iteration,
         'optimizer-count-zeros',
         'optimizer-inner-step',
         'optimizer-copy-main-to-model-params',
-        'optimizer']
+        'optimizer',
+        '(TP)backward_CopyToModelParallelRegion',
+        '(TP)forward_ReduceFromModelParallelRegion',
+        '(TP)forward_ScatterToModelParallelRegion',
+        '(TP)backward_ScatterToModelParallelRegion',
+        '(TP)forward_GatherFromModelParallelRegion',
+        '(TP)backward_GatherFromModelParallelRegion',
+        '(TP)forward_ScatterToSequenceParallelRegion',
+        '(TP)backward_ScatterToSequenceParallelRegion',
+        '(TP)forward_GatherFromSequenceParallelRegion',
+        '(TP)backward_GatherFromSequenceParallelRegion',
+        '(TP)forward_ReduceScatterToSequenceParallelRegion',
+        '(TP)backward_ReduceScatterToSequenceParallelRegion']
 
     # Calculate batch size.
     batch_size = args.micro_batch_size * args.data_parallel_size * \
@@ -1142,7 +1154,9 @@ def training_log(loss_dict, total_loss_dict, learning_rate, iteration,
             # Report memory after optimizer state has been initialized.
             report_memory('(after {} iterations)'.format(iteration))
             report_memory_flag = False
-        timers.log(timers_to_log, normalizer=args.log_interval)
+        # timers.log(timers_to_log, normalizer=args.log_interval)
+    
+    timers.out(timers_to_log)
 
     return report_memory_flag
 

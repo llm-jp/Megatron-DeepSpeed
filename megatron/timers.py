@@ -302,3 +302,18 @@ class Timers:
             for name in name_to_min_max_time:
                 _, max_time = name_to_min_max_time[name]
                 writer.add_scalar(name + '-time', max_time, iteration)
+    
+    def out(self, names, normalizer=1.0, reset=True):
+        """Log a group of timers."""
+        assert normalizer > 0.0
+        string = 'time (ms)'
+        for name in names:
+            if name in self._timers:
+                elapsed_time = self._timers[name].elapsed(reset=reset) / normalizer
+                string += ' | {}: {:2f}'.format(name, elapsed_time)
+        rank = torch.distributed.get_rank()
+        import os
+        pass_to_timer = os.environ.get('PASS_TO_TIMER', 'timer')
+        os.makedirs(pass_to_timer, exist_ok=True)
+        with open(f'{pass_to_timer}/timer.{rank:06d}', 'a') as f:
+            f.write(string + '\n')

@@ -8,6 +8,7 @@ from megatron.core.parallel_state import (
     get_tensor_model_parallel_group,
 )
 from .utils import split_tensor_along_last_dim
+from megatron import get_timers
 
 
 def _reduce(input_):
@@ -137,7 +138,11 @@ class _CopyToModelParallelRegion(torch.autograd.Function):
 
     @staticmethod
     def backward(ctx, grad_output):
-        return _reduce(grad_output)
+        timers = get_timers()
+        timers('(TP)backward_CopyToModelParallelRegion').start()
+        ret = _reduce(grad_output)
+        timers('(TP)backward_CopyToModelParallelRegion').stop()
+        return ret
 
 
 class _ReduceFromModelParallelRegion(torch.autograd.Function):
@@ -149,7 +154,11 @@ class _ReduceFromModelParallelRegion(torch.autograd.Function):
     
     @staticmethod
     def forward(ctx, input_):
-        return _reduce(input_)
+        timers = get_timers()
+        timers('(TP)forward_ReduceFromModelParallelRegion').start()
+        ret = _reduce(input_)
+        timers('(TP)forward_ReduceFromModelParallelRegion').stop()
+        return ret
 
     @staticmethod
     def backward(ctx, grad_output):
@@ -165,11 +174,19 @@ class _ScatterToModelParallelRegion(torch.autograd.Function):
 
     @staticmethod
     def forward(ctx, input_):
-        return _split_along_last_dim(input_)
+        timers = get_timers()
+        timers('(TP)forward_ScatterToModelParallelRegion').start()
+        ret = _split_along_last_dim(input_)
+        timers('(TP)forward_ScatterToModelParallelRegion').stop()
+        return ret
 
     @staticmethod
     def backward(ctx, grad_output):
-        return _gather_along_last_dim(grad_output)
+        timers = get_timers()
+        timers('(TP)backward_ScatterToModelParallelRegion').start()
+        ret = _gather_along_last_dim(grad_output)
+        timers('(TP)backward_ScatterToModelParallelRegion').stop()
+        return ret
 
 
 class _GatherFromModelParallelRegion(torch.autograd.Function):
@@ -181,11 +198,19 @@ class _GatherFromModelParallelRegion(torch.autograd.Function):
     
     @staticmethod
     def forward(ctx, input_):
-        return _gather_along_last_dim(input_)
+        timers = get_timers()
+        timers('(TP)forward_GatherFromModelParallelRegion').start()
+        ret = _gather_along_last_dim(input_)
+        timers('(TP)forward_GatherFromModelParallelRegion').stop()
+        return ret
 
     @staticmethod
     def backward(ctx, grad_output):
-        return _split_along_last_dim(grad_output)
+        timers = get_timers()
+        timers('(TP)backward_GatherFromModelParallelRegion').start()
+        ret = _split_along_last_dim(grad_output)
+        timers('(TP)backward_GatherFromModelParallelRegion').stop()
+        return ret
 
 
 class _ScatterToSequenceParallelRegion(torch.autograd.Function):
@@ -197,11 +222,19 @@ class _ScatterToSequenceParallelRegion(torch.autograd.Function):
 
     @staticmethod
     def forward(ctx, input_):
-        return _split_along_first_dim(input_)
+        timers = get_timers()
+        timers('(TP)forward_ScatterToSequenceParallelRegion').start()
+        ret = _split_along_first_dim(input_)
+        timers('(TP)forward_ScatterToSequenceParallelRegion').stop()
+        return ret
 
     @staticmethod
     def backward(ctx, grad_output):
-        return _gather_along_first_dim(grad_output)
+        timers = get_timers()
+        timers('(TP)backward_ScatterToSequenceParallelRegion').start()
+        ret = _gather_along_first_dim(grad_output)
+        timers('(TP)backward_ScatterToSequenceParallelRegion').stop()
+        return ret
 
 
 class _GatherFromSequenceParallelRegion(torch.autograd.Function):
@@ -213,11 +246,17 @@ class _GatherFromSequenceParallelRegion(torch.autograd.Function):
     
     @staticmethod
     def forward(ctx, input_, tensor_parallel_output_grad=True):
+        timers = get_timers()
+        timers('(TP)forward_GatherFromSequenceParallelRegion').start()
         ctx.tensor_parallel_output_grad = tensor_parallel_output_grad
-        return _gather_along_first_dim(input_)
+        ret = _gather_along_first_dim(input_)
+        timers('(TP)forward_GatherFromSequenceParallelRegion').stop()
+        return ret
 
     @staticmethod
     def backward(ctx, grad_output):
+        timers = get_timers()
+        timers('(TP)backward_GatherFromSequenceParallelRegion').start()
         tensor_parallel_output_grad = ctx.tensor_parallel_output_grad
 
         # If the computation graph after the gather operation is
@@ -225,9 +264,11 @@ class _GatherFromSequenceParallelRegion(torch.autograd.Function):
         # scattered and whereas if the computation is duplicated, 
         # output gradients need to be scattered.
         if tensor_parallel_output_grad:
-            return _reduce_scatter_along_first_dim(grad_output), None
+            ret = _reduce_scatter_along_first_dim(grad_output), None
         else:
-            return _split_along_first_dim(grad_output), None
+            ret = _split_along_first_dim(grad_output), None
+        timers('(TP)backward_GatherFromSequenceParallelRegion').stop()
+        return ret
 
 
 class _ReduceScatterToSequenceParallelRegion(torch.autograd.Function):
@@ -239,11 +280,19 @@ class _ReduceScatterToSequenceParallelRegion(torch.autograd.Function):
     
     @staticmethod
     def forward(ctx, input_):
-        return _reduce_scatter_along_first_dim(input_)
+        timers = get_timers()
+        timers('(TP)forward_ReduceScatterToSequenceParallelRegion').start()
+        ret = _reduce_scatter_along_first_dim(input_)
+        timers('(TP)forward_ReduceScatterToSequenceParallelRegion').stop()
+        return ret
 
     @staticmethod
     def backward(ctx, grad_output):
-        return _gather_along_first_dim(grad_output)
+        timers = get_timers()
+        timers('(TP)backward_ReduceScatterToSequenceParallelRegion').start()
+        ret = _gather_along_first_dim(grad_output)
+        timers('(TP)backward_ReduceScatterToSequenceParallelRegion').stop()
+        return ret
 
 
 # -----------------
