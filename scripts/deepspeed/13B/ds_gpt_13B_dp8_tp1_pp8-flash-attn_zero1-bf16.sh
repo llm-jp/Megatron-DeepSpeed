@@ -7,8 +7,7 @@ num_layers=40
 hidden_size=5120
 num_attn_heads=40
 
-global_batch_size=2048
-
+global_batch_size=1280
 lr=1.0e-4
 min_lr=1.0e-6
 init_std=0.008
@@ -55,7 +54,7 @@ mp_size=1 # tensor model parallel size
 ## Pipeline parallelism. To disable PP, set pp_size to 1 and no_pp to true.
 ## Note that currently both curriculum learning and random-LTD are NOT
 ## compatible with pipeline parallelism.
-pp_size=4
+pp_size=8
 no_pp="false"
 
 ## ZeRO-based data parallelism, stage=0 will disable ZeRO
@@ -63,7 +62,7 @@ zero_stage=1
 
 ## Total number of GPUs
 num_gpus_pernode=8
-num_node=16
+num_node=8
 num_gpus=$((${num_gpus_pernode} * ${num_node}))
 
 ## Data parallel size.
@@ -99,7 +98,7 @@ num_workers=2
 
 # dataset
 data_path="dataset/wikipedia/binarized/v2-code20k_en40k_ja80k/ja_wiki_text_document"
-model_path="llm-ja-tokenizer/models/ver2/code20k_en40k_ja80k.ver2.model"
+vocab_path="llm-ja-tokenizer/models/ver2/code20k_en40k_ja80k.ver2.model"
 
 prescale_grad="true"
 
@@ -134,8 +133,8 @@ mkdir -p ${tensorboard_path}
 
 ###############################################################################
 data_options=" \
-    --tokenizer-model ${model_path} \
-    --tokenizer-type SentencePieceTokenizer \
+    --vocab-file ${vocab_path} \
+    --tokenizer-type JapaneseSentencePiece \
     --data-path ${data_path} \
     --data-impl mmap"
 
@@ -172,7 +171,7 @@ megatron_options=" \
     --hysteresis 2 \
     --num-workers ${num_workers} \
     --distributed-backend nccl \
-    --fp16 \
+    --bf16 \
     --seed ${seed} \
     --load ${checkpoint_path} \
     --save ${checkpoint_path} \
@@ -191,7 +190,7 @@ fi
 
 ## Whether or not log optimizer states (norms, max abs values) to tensorboard.
 ## This is not required for training and might save GPU memory when turned off.
-log_optimizer_state="true"
+log_optimizer_state="false"
 
 if [ "${log_optimizer_state}" = "true" ]; then
   megatron_options="${megatron_options} \
@@ -200,7 +199,7 @@ fi
 
 # DeepSpeed Config
 config_json="scripts/deepspeed/config/ds_config_gbs${global_batch_size}_mbs${batch_size}_log${log_interval}_zero${zero_stage}.json"
-template_json="examples_deepspeed/rebase/ds_config_gpt_TEMPLATE.json"
+template_json="scripts/deepspeed/config/ds_config_gpt_TEMPLATE.json"
 sed "s/GBSIZE/${global_batch_size}/" ${template_json} |
   sed "s/MBSIZE/${batch_size}/" |
   sed "s/LOG_INTERVAL/${log_interval}/" |
