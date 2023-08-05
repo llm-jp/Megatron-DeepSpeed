@@ -180,7 +180,7 @@ def _set_wandb_writer(args):
                 "entity": entity,
                 "name": exp_name,
                 "config": args,
-                "project": "new-megatron-deepspeed",
+                "project": "megatron-deepspeed-abci",
             }
             if args.wandb_id is not None:
                 wandb_input["id"] = args.wandb_id
