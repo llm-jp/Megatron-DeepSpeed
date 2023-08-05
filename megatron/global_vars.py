@@ -175,7 +175,7 @@ def _set_wandb_writer(args):
             now = datetime.now()
             now = now.strftime("%Y-%m-%d-%H-%M-%S")
             exp_name = args.wandb_name + "-" + now
-            entity: str = args.wandb_entity or "okoge"
+            entity: str = args.wandb_entity or "llm-jp"
             wandb_input = {
                 "entity": entity,
                 "name": exp_name,

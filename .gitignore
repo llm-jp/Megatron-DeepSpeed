@@ -11,6 +11,10 @@ dataset/index-cache/*
 scripts/deepspeed/config/*
 !scripts/deepspeed/config/.gitkeep
 
+dataset/wikipedia/*
+scripts/deepspeed/hostfile/*
+!scripts/deepspeed/hostfile/.gitkeep
+
 # dependncies
 apex/
 triton/
