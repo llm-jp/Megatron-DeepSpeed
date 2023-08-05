@@ -14,3 +14,9 @@ tensorboard
 
 # mpirun
 mpi4py
+
+# tokenizer v2
+sentencepiece
+
+# tokenize
+nltk
