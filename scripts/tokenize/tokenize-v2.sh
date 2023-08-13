@@ -15,9 +15,9 @@ export MODELDIR=llm-ja-tokenizer/models/ver2/code${CODE_VOCAB_SIZE}k_en${EN_VOCA
 python tools/preprocess_data.py \
   --input dataset/wikipedia/merged/ja/ja_merged.json \
   --output-prefix $OUTDIR/ja_wiki \
-  --vocab-file $MODELDIR \
+  --tokenizer-model $MODELDIR \
   --dataset-impl mmap \
-  --tokenizer-type JapaneseSentencePiece \
+  --tokenizer-type SentencePieceTokenizer \
   --workers 64 \
   --append-eod
 
@@ -25,8 +25,8 @@ python tools/preprocess_data.py \
 python tools/preprocess_data.py \
   --input dataset/wikipedia/merged/en/en_merged.json \
   --output-prefix $OUTDIR/en_wiki \
-  --vocab-file $MODELDIR \
+  --tokenizer-model $MODELDIR \
   --dataset-impl mmap \
-  --tokenizer-type JapaneseSentencePiece \
+  --tokenizer-type SentencePieceTokenizer \
   --workers 64 \
   --append-eod
