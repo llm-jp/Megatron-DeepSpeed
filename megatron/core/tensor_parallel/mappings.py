@@ -138,6 +138,7 @@ class _CopyToModelParallelRegion(torch.autograd.Function):
 
     @staticmethod
     def backward(ctx, grad_output):
+        torch.distributed.barrier(get_tensor_model_parallel_group())
         timers = get_timers()
         timers('(TP)backward_CopyToModelParallelRegion').start()
         ret = _reduce(grad_output)
@@ -154,6 +155,7 @@ class _ReduceFromModelParallelRegion(torch.autograd.Function):
     
     @staticmethod
     def forward(ctx, input_):
+        torch.distributed.barrier(get_tensor_model_parallel_group())
         timers = get_timers()
         timers('(TP)forward_ReduceFromModelParallelRegion').start()
         ret = _reduce(input_)
@@ -174,6 +176,7 @@ class _ScatterToModelParallelRegion(torch.autograd.Function):
 
     @staticmethod
     def forward(ctx, input_):
+        torch.distributed.barrier(get_tensor_model_parallel_group())
         timers = get_timers()
         timers('(TP)forward_ScatterToModelParallelRegion').start()
         ret = _split_along_last_dim(input_)
@@ -182,6 +185,7 @@ class _ScatterToModelParallelRegion(torch.autograd.Function):
 
     @staticmethod
     def backward(ctx, grad_output):
+        torch.distributed.barrier(get_tensor_model_parallel_group())
         timers = get_timers()
         timers('(TP)backward_ScatterToModelParallelRegion').start()
         ret = _gather_along_last_dim(grad_output)
@@ -198,6 +202,7 @@ class _GatherFromModelParallelRegion(torch.autograd.Function):
     
     @staticmethod
     def forward(ctx, input_):
+        torch.distributed.barrier(get_tensor_model_parallel_group())
         timers = get_timers()
         timers('(TP)forward_GatherFromModelParallelRegion').start()
         ret = _gather_along_last_dim(input_)
@@ -206,6 +211,7 @@ class _GatherFromModelParallelRegion(torch.autograd.Function):
 
     @staticmethod
     def backward(ctx, grad_output):
+        torch.distributed.barrier(get_tensor_model_parallel_group())
         timers = get_timers()
         timers('(TP)backward_GatherFromModelParallelRegion').start()
         ret = _split_along_last_dim(grad_output)
@@ -222,6 +228,7 @@ class _ScatterToSequenceParallelRegion(torch.autograd.Function):
 
     @staticmethod
     def forward(ctx, input_):
+        torch.distributed.barrier(get_tensor_model_parallel_group())
         timers = get_timers()
         timers('(TP)forward_ScatterToSequenceParallelRegion').start()
         ret = _split_along_first_dim(input_)
@@ -230,6 +237,7 @@ class _ScatterToSequenceParallelRegion(torch.autograd.Function):
 
     @staticmethod
     def backward(ctx, grad_output):
+        torch.distributed.barrier(get_tensor_model_parallel_group())
         timers = get_timers()
         timers('(TP)backward_ScatterToSequenceParallelRegion').start()
         ret = _gather_along_first_dim(grad_output)
@@ -246,6 +254,7 @@ class _GatherFromSequenceParallelRegion(torch.autograd.Function):
     
     @staticmethod
     def forward(ctx, input_, tensor_parallel_output_grad=True):
+        torch.distributed.barrier(get_tensor_model_parallel_group())
         timers = get_timers()
         timers('(TP)forward_GatherFromSequenceParallelRegion').start()
         ctx.tensor_parallel_output_grad = tensor_parallel_output_grad
@@ -255,6 +264,7 @@ class _GatherFromSequenceParallelRegion(torch.autograd.Function):
 
     @staticmethod
     def backward(ctx, grad_output):
+        torch.distributed.barrier(get_tensor_model_parallel_group())
         timers = get_timers()
         timers('(TP)backward_GatherFromSequenceParallelRegion').start()
         tensor_parallel_output_grad = ctx.tensor_parallel_output_grad
@@ -280,6 +290,7 @@ class _ReduceScatterToSequenceParallelRegion(torch.autograd.Function):
     
     @staticmethod
     def forward(ctx, input_):
+        torch.distributed.barrier(get_tensor_model_parallel_group())
         timers = get_timers()
         timers('(TP)forward_ReduceScatterToSequenceParallelRegion').start()
         ret = _reduce_scatter_along_first_dim(input_)
@@ -288,6 +299,7 @@ class _ReduceScatterToSequenceParallelRegion(torch.autograd.Function):
 
     @staticmethod
     def backward(ctx, grad_output):
+        torch.distributed.barrier(get_tensor_model_parallel_group())
         timers = get_timers()
         timers('(TP)backward_ReduceScatterToSequenceParallelRegion').start()
         ret = _gather_along_first_dim(grad_output)
