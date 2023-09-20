@@ -4,7 +4,7 @@ import argparse
 import os
 import torch
 from collections import OrderedDict
-from .deepspeed_checkpoint import ARGS_KEY, DeepSpeedCheckpoint
+from deepspeed_checkpoint import ARGS_KEY, DeepSpeedCheckpoint
 
 MODEL_KEY = 'model'
 ARGS_KEY = 'args'
@@ -25,6 +25,7 @@ def parse_arguments():
     parser.add_argument('--target_tp', default=1, type=int, help='Target TP degree')
     parser.add_argument('--target_pp', default=1, type=int, help='Target PP degree')
     parser.add_argument('--for_release', action='store_true', help='Convert for release purpose, reset some (progress) counters.')
+    parser.add_argument('--eos_token_id', type=int, default=7)
     args = parser.parse_args()
     print(f'args = {args}')
     return args
