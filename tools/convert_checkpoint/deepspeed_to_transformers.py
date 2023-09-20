@@ -7,6 +7,8 @@ import json
 from deepspeed_checkpoint import DeepSpeedCheckpoint
 from deepspeed_to_megatron import _create_rank_checkpoint, parse_arguments
 
+
+
 # the import was tested to work with this version
 # https://github.com/huggingface/transformers/commit/0af901e83 if it diverges we may consider
 # copying that version here instead
@@ -47,8 +49,8 @@ def main():
         scale_attn_weights=True,
         gradient_checkpointing=False,
         use_cache=True,
-        bos_token_id=50256,
-        eos_token_id=50256,
+        bos_token_id=args.eos_token_id,
+        eos_token_id=args.eos_token_id,
     )
 
     # Convert.
