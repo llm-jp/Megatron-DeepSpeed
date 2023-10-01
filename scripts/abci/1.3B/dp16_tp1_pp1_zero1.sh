@@ -1,6 +1,6 @@
 #!/bin/bash
 #$ -l rt_AF=2
-#$ -l h_rt=0:30:00
+#$ -l h_rt=5:00:00
 #$ -j y
 #$ -o outputs/
 #$ -cwd
@@ -13,7 +13,7 @@ module load nccl/2.16/2.16.2-1
 module load hpcx/2.12
 
 # python virtualenv
-cd /home/acf15649kv/llm-jp/Megatron-DeepSpeed
+cd /home/acf15649kv/llm-jp/llm-jp-Megatron-DeepSpeed
 source .env/bin/activate
 
 ## GPT-3 1.3B
@@ -120,7 +120,7 @@ num_workers=0
 ## https://the-eye.eu/public/AI/pile_neox/ Change data_home to where you
 ## store the pile_text_document.bin and pile_text_document.idx.
 
-data_path="dataset/BookCorpusDataset_text_document"
+data_path="/home/acf15649kv/work/Megatron-DeepSpeed/dataset/BookCorpusDataset_text_document"
 vocab_path="dataset/gpt2-vocab.json"
 merge_path="dataset/gpt2-merges.txt"
 
@@ -142,7 +142,7 @@ jobname="${jobname}_seed${seed}_rebase"
 
 output_home="outputs"
 log_path="${output_home}/log/"
-checkpoint_path="/groups/gcf51174/checkpoints/new-megatron-deepspeed/mpirun/${jobname}"
+checkpoint_path="/groups/gaf51217/fujii/checkpoints/megatron-deepspeed/${jobname}-no-slw"
 ## Microsoft internal constraint: because tensorboard is logged by last rank,
 ## it's better to put the path in NFS instead of Blob.
 tensorboard_dir="${output_home}/tensorboard/"
@@ -190,7 +190,7 @@ megatron_options=" \
     --hysteresis 2 \
     --num-workers ${num_workers} \
     --distributed-backend nccl \
-    --fp16 \
+    --bf16 \
     --seed ${seed} \
     --load ${checkpoint_path} \
     --save ${checkpoint_path} \
@@ -213,7 +213,7 @@ fi
 
 # DeepSpeed Config
 config_json="scripts/deepspeed/config/ds_config_gbs${global_batch_size}_mbs${batch_size}_log${log_interval}_zero${zero_stage}.json"
-template_json="examples_deepspeed/rebase/ds_config_gpt_TEMPLATE.json"
+template_json="examples_deepspeed/rebase/ds_config_gpt_TEMPLATE_bf16.json"
 sed "s/GBSIZE/${global_batch_size}/" ${template_json} |
   sed "s/MBSIZE/${batch_size}/" |
   sed "s/LOG_INTERVAL/${log_interval}/" |
@@ -258,10 +258,9 @@ mpirun -np $num_gpus \
   -x MASTER_PORT=$MASTER_PORT \
   -bind-to none -map-by slot \
   -x NCCL_DEBUG=INFO  -x PATH \
-  -mca pml ob1 -mca btl ^openib \
   python pretrain_gpt.py \
   ${megatron_options} \
   --use-mpi \
-  --wandb-name "mpirun-${jobname}" \
+  --wandb-name "abci-no-slw-${jobname}" \
   ${data_options} \
   ${deepspeed_options}

@@ -1,6 +1,6 @@
 #!/bin/bash
 #$ -l rt_AF=2
-#$ -l h_rt=0:30:00
+#$ -l h_rt=3:00:00
 #$ -j y
 #$ -o outputs/
 #$ -cwd
@@ -142,7 +142,7 @@ jobname="${jobname}_seed${seed}_rebase"
 
 output_home="outputs"
 log_path="${output_home}/log/"
-checkpoint_path="/groups/gaf51217/fujii/checkpoints/megatron-deepspeed/${jobname}"
+checkpoint_path="/groups/gaf51217/fujii/checkpoints/megatron-deepspeed/${jobname}-slw"
 ## Microsoft internal constraint: because tensorboard is logged by last rank,
 ## it's better to put the path in NFS instead of Blob.
 tensorboard_dir="${output_home}/tensorboard/"
@@ -192,6 +192,8 @@ megatron_options=" \
     --num-workers ${num_workers} \
     --distributed-backend nccl \
     --bf16 \
+    --load ${checkpoint_path} \
+    --save ${checkpoint_path} \
     --seed ${seed} \
     --no-async-tensor-model-parallel-allreduce \
     --tensorboard-queue-size 1 \
@@ -257,7 +259,6 @@ mpirun -np $num_gpus \
   -x MASTER_PORT=$MASTER_PORT \
   -bind-to none -map-by slot \
   -x NCCL_DEBUG=INFO  -x PATH \
-  -mca pml ob1 -mca btl ^openib \
   python pretrain_gpt.py \
   ${megatron_options} \
   --use-mpi \
