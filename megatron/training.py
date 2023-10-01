@@ -12,6 +12,7 @@ import wandb
 _TRAIN_START_TIME = time.time()
 import torch
 from torch.nn.parallel.distributed import DistributedDataParallel as torchDDP
+from torch import distributed as torch_distributed
 
 from megatron import get_args
 from megatron import get_signal_handler
@@ -22,7 +23,7 @@ from megatron import get_num_microbatches
 from megatron import is_last_rank
 from megatron import update_num_microbatches
 from megatron.core import mpu, tensor_parallel
-from megatron import print_rank_0, is_rank_0
+from megatron import print_rank_0
 from megatron import print_rank_last
 from megatron.checkpointing import load_checkpoint
 from megatron.checkpointing import save_checkpoint
@@ -52,7 +53,7 @@ from megatron.model.transformer import ParallelTransformerLayer
 
 def print_datetime(string):
     """Note that this call will sync across all ranks."""
-    torch.distributed.barrier()
+    torch_distributed.barrier()
     time_str = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     print_rank_0('[' + string + '] datetime: {} '.format(time_str))
 
@@ -106,8 +107,8 @@ def pretrain(train_valid_test_dataset_provider,
     # image ... launches.
     global _TRAIN_START_TIME
     start_time_tensor = get_accelerator().DoubleTensor([_TRAIN_START_TIME])
-    torch.distributed.all_reduce(start_time_tensor,
-                                 op=torch.distributed.ReduceOp.MIN)
+    torch_distributed.all_reduce(start_time_tensor,
+                                 op=torch_distributed.ReduceOp.MIN)
     _TRAIN_START_TIME = start_time_tensor.item()
     print_rank_0('time to initialize megatron (seconds): {:.3f}'.format(
         time.time() - _TRAIN_START_TIME))
@@ -853,7 +854,7 @@ def training_log(loss_dict, total_loss_dict, learning_rate, iteration,
                               args.consumed_train_samples)
             writer.add_scalar(f"lm-loss-training/{key}" + ' vs tokens', loss_dict[key],
                               args.consumed_train_tokens)
-        if args.log_loss_scale_to_tensorboard:
+        if args.log_loss_scale_to_tensorboard and loss_scale is not None:
             writer.add_scalar('loss-scale/loss-scale', loss_scale, iteration)
             writer.add_scalar('loss-scale/loss-scale vs samples', loss_scale,
                               args.consumed_train_samples)
@@ -976,6 +977,11 @@ def training_log(loss_dict, total_loss_dict, learning_rate, iteration,
         if args.log_optimizer_states_to_tensorboard and optimizer is not None:
             opt_stats = [0.0] * 8
             opt_stats_2 = [0.0] * 4
+
+            from deepspeed.runtime import bf16_optimizer
+            if isinstance(optimizer, bf16_optimizer.BF16_Optimizer):
+                optimizer = optimizer.optimizer
+
             for _, group in enumerate(optimizer.param_groups):
                 for _, param in enumerate(group['params']):
                     opt_stats[0] += (torch.norm(optimizer.state[param]['exp_avg_sq']).item())**2
@@ -990,30 +996,30 @@ def training_log(loss_dict, total_loss_dict, learning_rate, iteration,
                     opt_stats_2[1] = max(opt_stats_2[1], optimizer.state[param]['exp_avg_sq'].sqrt().abs_().max().item())
                     opt_stats_2[2] = max(opt_stats_2[2], abs(optimizer.state[param]['exp_avg'].max().item()), abs(optimizer.state[param]['exp_avg'].min().item()))
                     opt_stats_2[3] = max(opt_stats_2[3], abs(param.max().item()), abs(param.min().item()))
-            # print('step {} rank {} before sync opt_stats {}, {}'.format(iteration, torch.distributed.get_rank(), opt_stats_2, opt_stats))
+            # print('step {} rank {} before sync opt_stats {}, {}'.format(iteration, torch_distributed.get_rank(), opt_stats_2, opt_stats))
             if args.zero_stage > 0:
                 # ZeRO partiions optimizer states
                 opt_stats = get_accelerator().FloatTensor(opt_stats)
-                torch.distributed.all_reduce(opt_stats, group=mpu.get_data_parallel_group())
+                torch_distributed.all_reduce(opt_stats, group=mpu.get_data_parallel_group())
                 opt_stats_2 = get_accelerator().FloatTensor(opt_stats_2)
-                torch.distributed.all_reduce(opt_stats_2, op=torch.distributed.ReduceOp.MAX,
+                torch_distributed.all_reduce(opt_stats_2, op=torch_distributed.ReduceOp.MAX,
                     group=mpu.get_data_parallel_group())
 
             if args.tensor_model_parallel_size > 1:
                 opt_stats = get_accelerator().FloatTensor(opt_stats)
-                torch.distributed.all_reduce(opt_stats, group=mpu.get_tensor_model_parallel_group())
+                torch_distributed.all_reduce(opt_stats, group=mpu.get_tensor_model_parallel_group())
                 opt_stats_2 = get_accelerator().FloatTensor(opt_stats_2)
-                torch.distributed.all_reduce(opt_stats_2, op=torch.distributed.ReduceOp.MAX,
+                torch_distributed.all_reduce(opt_stats_2, op=torch_distributed.ReduceOp.MAX,
                     group=mpu.get_tensor_model_parallel_group())
 
             if args.pipeline_model_parallel_size > 1:
                 opt_stats = get_accelerator().FloatTensor(opt_stats)
-                torch.distributed.all_reduce(opt_stats, group=mpu.get_pipeline_model_parallel_group())
+                torch_distributed.all_reduce(opt_stats, group=mpu.get_pipeline_model_parallel_group())
                 opt_stats_2 = get_accelerator().FloatTensor(opt_stats_2)
-                torch.distributed.all_reduce(opt_stats_2, op=torch.distributed.ReduceOp.MAX,
+                torch_distributed.all_reduce(opt_stats_2, op=torch_distributed.ReduceOp.MAX,
                     group=mpu.get_pipeline_model_parallel_group())
 
-            # print('step {} rank {} after sync opt_stats {}, {}'.format(iteration, torch.distributed.get_rank(), opt_stats_2, opt_stats))
+            # print('step {} rank {} after sync opt_stats {}, {}'.format(iteration, torch_distributed.get_rank(), opt_stats_2, opt_stats))
             if writer and is_last_rank():
                 writer.add_scalar('optimizer/variance_l2 vs tokens', opt_stats[0]**0.5, args.consumed_train_tokens)
                 writer.add_scalar('optimizer/variance_sqrt_l2 vs tokens', opt_stats[1]**0.5, args.consumed_train_tokens)
@@ -1042,18 +1048,18 @@ def training_log(loss_dict, total_loss_dict, learning_rate, iteration,
                 writer.add_scalar('optimizer/weight_abs_max', opt_stats_2[3], iteration)
 
             if wandb_writer and is_last_rank():
-                wandb_stats['optimizer/variance_l2'] = opt_stats[0]**0.5
-                wandb_stats['optimizer/variance_sqrt_l2'] = opt_stats[1]**0.5
-                wandb_stats['optimizer/momentum_l2'] = opt_stats[2]**0.5
-                wandb_stats['optimizer/weight_l2'] = opt_stats[3]**0.5
-                wandb_stats['optimizer/variance_l1'] = opt_stats[4]
-                wandb_stats['optimizer/variance_sqrt_l1'] = opt_stats[5]
-                wandb_stats['optimizer/momentum_l1'] = opt_stats[6]
-                wandb_stats['optimizer/weight_l1'] = opt_stats[7]
-                wandb_stats['optimizer/variance_abs_max'] = opt_stats_2[0]
-                wandb_stats['optimizer/variance_sqrt_abs_max'] = opt_stats_2[1]
-                wandb_stats['optimizer/momentum_abs_max'] = opt_stats_2[2]
-                wandb_stats['optimizer/weight_abs_max'] = opt_stats_2[3]
+                wandb_stats['optimizer/variance_l2'] = opt_stats[0]**0.5 / args.world_size
+                wandb_stats['optimizer/variance_sqrt_l2'] = opt_stats[1]**0.5 / args.world_size
+                wandb_stats['optimizer/momentum_l2'] = opt_stats[2]**0.5 / args.world_size
+                wandb_stats['optimizer/weight_l2'] = opt_stats[3]**0.5 / args.world_size
+                wandb_stats['optimizer/variance_l1'] = opt_stats[4] / args.world_size
+                wandb_stats['optimizer/variance_sqrt_l1'] = opt_stats[5] / args.world_size
+                wandb_stats['optimizer/momentum_l1'] = opt_stats[6] / args.world_size
+                wandb_stats['optimizer/weight_l1'] = opt_stats[7] / args.world_size
+                wandb_stats['optimizer/variance_abs_max'] = opt_stats_2[0] / args.world_size
+                wandb_stats['optimizer/variance_sqrt_abs_max'] = opt_stats_2[1] / args.world_size
+                wandb_stats['optimizer/momentum_abs_max'] = opt_stats_2[2] / args.world_size
+                wandb_stats['optimizer/weight_abs_max'] = opt_stats_2[3] / args.world_size
 
     if iteration % args.log_interval == 0:
         elapsed_time = timers('interval-time').elapsed(barrier=True)
@@ -1171,7 +1177,7 @@ def train(forward_step_func, model, optimizer, opt_param_scheduler,
     if args.random_ltd:
         # random-ltd requires different randomness on each rank
         import random
-        random.seed(args.seed + torch.distributed.get_rank())
+        random.seed(args.seed + torch_distributed.get_rank())
 
     # Turn on training mode which enables dropout.
     for model_module in model:
@@ -1296,8 +1302,8 @@ def train(forward_step_func, model, optimizer, opt_param_scheduler,
             train_time = (time.time() - _TRAIN_START_TIME) / 60.0
             done_cuda = get_accelerator().IntTensor(
                 [train_time > args.exit_duration_in_mins])
-            torch.distributed.all_reduce(
-                done_cuda, op=torch.distributed.ReduceOp.MAX)
+            torch_distributed.all_reduce(
+                done_cuda, op=torch_distributed.ReduceOp.MAX)
             done = done_cuda.item()
             if done:
                 if not saved_checkpoint:
@@ -1311,7 +1317,7 @@ def train(forward_step_func, model, optimizer, opt_param_scheduler,
             if args.save and not saved_checkpoint:
                 save_checkpoint_and_time(iteration, model, optimizer,
                                          opt_param_scheduler)
-            torch.distributed.barrier()
+            torch_distributed.barrier()
             print_datetime('exiting program at iteration {}'.format(iteration))
             sys.exit()
 
@@ -1549,7 +1555,7 @@ def build_train_valid_test_data_loaders(
         flags = get_accelerator().LongTensor([0, 0, 0])
 
     # Broadcast num tokens.
-    torch.distributed.broadcast(flags,
+    torch_distributed.broadcast(flags,
                                 mpu.get_tensor_model_parallel_src_rank(),
                                 group=mpu.get_tensor_model_parallel_group())
     args.do_train = flags[0].item()
