@@ -1,0 +1,33 @@
+{
+  "train_batch_size": GBSIZE,
+  "train_micro_batch_size_per_gpu": MBSIZE,
+  "steps_per_print": LOG_INTERVAL,
+
+  "zero_optimization": {
+    "stage": ZERO_STAGE,
+    "elastic_checkpoint": false
+  },
+
+  "gradient_clipping": 1.0,
+  "prescale_gradients": PRESCALE_GRAD,
+
+  "bf16": {
+    "enabled": true
+  },
+
+  "wall_clock_breakdown" : false,
+  "data_types" : {
+    "grad_accum_dtype": "fp32"
+  },
+  "curriculum_learning": {
+    "enabled": true,
+    "curriculum_type": "seqlen",
+    "min_difficulty": 64,
+    "max_difficulty": 2048,
+    "schedule_type": "fixed_linear",
+    "schedule_config": {
+      "total_curriculum_step": 100,
+      "difficulty_step": 8
+    }
+  }
+}
