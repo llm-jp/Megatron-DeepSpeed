@@ -1,7 +1,9 @@
 {
   "cSpell.words": [
     "gelu",
+    "microbatches",
     "OMPI",
+    "Rampup",
     "sentencepiece"
   ],
   "files.watcherExclude": {
