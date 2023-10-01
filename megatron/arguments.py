@@ -16,10 +16,12 @@ from tools.retro.utils import get_args_path as get_retro_args_path
 
 from megatron.core.transformer import TransformerConfig
 
+
 def parse_args(extra_args_provider=None, ignore_unknown_args=False):
     """Parse all arguments."""
-    parser = argparse.ArgumentParser(description='Megatron-LM Arguments',
-                                     allow_abbrev=False)
+    parser: argparse.ArgumentParser = argparse.ArgumentParser(
+        description='Megatron-LM Arguments', allow_abbrev=False
+    )
 
     # Standard arguments.
     parser = _add_network_size_args(parser)
@@ -73,6 +75,7 @@ def parse_args(extra_args_provider=None, ignore_unknown_args=False):
     args.world_size = int(os.getenv("WORLD_SIZE", '1'))
 
     return args
+
 
 def validate_args(args, defaults={}):
     # Tensor model parallel size.

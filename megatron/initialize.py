@@ -1,9 +1,8 @@
 # Copyright (c) 2022, NVIDIA CORPORATION. All rights reserved.
 
 """Megatron initialization."""
-
+import argparse
 import random
-import os
 import time
 
 import numpy as np
@@ -40,7 +39,7 @@ def initialize_megatron(extra_args_provider=None, args_defaults={},
         assert get_accelerator().is_available(), 'Megatron requires accelerator.'
 
     # Parse arguments
-    args = parse_args(extra_args_provider, ignore_unknown_args)
+    args: argparse.Namespace = parse_args(extra_args_provider, ignore_unknown_args)
 
     if args.use_checkpoint_args or args_defaults.get('use_checkpoint_args', False):
         assert args.load is not None, '--use-checkpoints-args requires --load argument'

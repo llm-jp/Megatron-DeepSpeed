@@ -4,16 +4,21 @@
 
 import os
 import sys
-import torch
+import argparse
+import typing
+from typing import Optional, Union
 
 from megatron import dist_signal_handler
 from megatron.tokenizer import build_tokenizer
 from .microbatches import build_num_microbatches_calculator
 from .timers import Timers
+from megatron.microbatches import ConstantNumMicroBatches, RampupBatchsizeNumMicroBatches
 
-_GLOBAL_ARGS = None
+_GLOBAL_ARGS: Optional[argparse.Namespace] = None
 _GLOBAL_RETRO_ARGS = None
-_GLOBAL_NUM_MICROBATCHES_CALCULATOR = None
+_GLOBAL_NUM_MICROBATCHES_CALCULATOR: Optional[
+    Union[ConstantNumMicroBatches, RampupBatchsizeNumMicroBatches]
+] = None
 _GLOBAL_TOKENIZER = None
 _GLOBAL_TENSORBOARD_WRITER = None
 _GLOBAL_WANDB_WRITER = None
@@ -21,10 +26,11 @@ _GLOBAL_ADLR_AUTORESUME = None
 _GLOBAL_TIMERS = None
 _GLOBAL_SIGNAL_HANDLER = None
 
-def get_args():
+
+def get_args() -> argparse.Namespace:
     """Return arguments."""
     _ensure_var_is_initialized(_GLOBAL_ARGS, 'args')
-    return _GLOBAL_ARGS
+    return typing.cast(argparse.Namespace, _GLOBAL_ARGS)
 
 
 def get_retro_args():
@@ -32,16 +38,16 @@ def get_retro_args():
     return _GLOBAL_RETRO_ARGS
 
 
-def get_num_microbatches():
-    return _GLOBAL_NUM_MICROBATCHES_CALCULATOR.get()
+def get_num_microbatches() -> int:
+    return _GLOBAL_NUM_MICROBATCHES_CALCULATOR.get()  # type: ignore
 
 
-def get_current_global_batch_size():
-    return _GLOBAL_NUM_MICROBATCHES_CALCULATOR.get_current_global_batch_size()
+def get_current_global_batch_size() -> int:
+    return _GLOBAL_NUM_MICROBATCHES_CALCULATOR.get_current_global_batch_size()  # type: ignore
 
 
 def update_num_microbatches(consumed_samples, consistency_check=True):
-    _GLOBAL_NUM_MICROBATCHES_CALCULATOR.update(consumed_samples,
+    _GLOBAL_NUM_MICROBATCHES_CALCULATOR.update(consumed_samples,  # type: ignore
                                                consistency_check)
 
 
@@ -84,7 +90,6 @@ def _set_signal_handler():
     _GLOBAL_SIGNAL_HANDLER = dist_signal_handler.DistributedSignalHandler().__enter__()
 
 
-
 def set_global_variables(args):
     """Set args, tokenizer, tensorboard-writer, adlr-autoresume, and timers."""
 
@@ -102,9 +107,9 @@ def set_global_variables(args):
 
     if args.exit_signal_handler:
         _set_signal_handler()
-    
 
-def set_args(args):
+
+def set_args(args: argparse.Namespace) -> None:
     global _GLOBAL_ARGS
     _GLOBAL_ARGS = args
 
