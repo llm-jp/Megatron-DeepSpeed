@@ -1,8 +1,8 @@
 #!/bin/bash
-#$ -l rt_AF=2
-#$ -l h_rt=0:30:00
+#$ -l rt_AF=30
+#$ -l h_rt=24:00:00
 #$ -j y
-#$ -o outputs/
+#$ -o outputs/175B/
 #$ -cwd
 
 # module load
@@ -16,17 +16,18 @@ module load hpcx/2.12
 cd /home/acf15649kv/llm-jp/llm-jp-Megatron-DeepSpeed
 source .env/bin/activate
 
-## GPT-3 1.3B
-model_size=1.3
+# GPT-3 164B
+model_size=164
 
-num_layers=24
-hidden_size=2048
-num_attn_heads=16
+num_layers=90
+hidden_size=12288
+num_attn_heads=96
 
-global_batch_size=512
-lr=2.0e-4
+global_batch_size=1536
+
+lr=0.6e-4
 min_lr=1.0e-6
-init_std=0.013
+init_std=0.005
 
 sequence_length=2048
 
@@ -64,12 +65,12 @@ lr_decay_style="cosine"
 ###############################################################################
 ### Parallelism configs
 ## Model parallelism, 1 is no MP
-mp_size=1 # tensor model parallel size
+mp_size=8 # tensor model parallel size
 
 ## Pipeline parallelism. To disable PP, set pp_size to 1 and no_pp to true.
 ## Note that currently both curriculum learning and random-LTD are NOT
 ## compatible with pipeline parallelism.
-pp_size=1
+pp_size=30
 no_pp="false"
 
 ## ZeRO-based data parallelism, stage=0 will disable ZeRO
@@ -87,7 +88,7 @@ dp_size=$((${num_gpus} / ${pp_size} / ${mp_size}))
 ## Make sure that batch_size <= global_batch_size*pp_size*mp_size/num_gpus
 ## Reduce it manually if GPU OOM
 # batch_size=$(( ${global_batch_size} / ${dp_size} ))
-batch_size=2
+batch_size=1
 ###############################################################################
 ### Misc configs
 log_interval=1
@@ -99,11 +100,11 @@ eval_interval=100
 num_save=100
 estimated_train_iter=$((${train_tokens} / ${sequence_length} / ${global_batch_size}))
 # save_interval=$((${estimated_train_iter} / ${num_save}))
-save_interval=100
+save_interval=30
 
 ## Activation checkpointing saves GPU memory, but reduces training speed
 # activation_checkpoint="true"
-activation_checkpoint="false"
+activation_checkpoint="true"
 
 ## Whether or not log optimizer states (norms, max abs values) to tensorboard.
 ## This is not required for training and might save GPU memory when turned off.
@@ -142,7 +143,7 @@ jobname="${jobname}_seed${seed}_rebase"
 
 output_home="outputs"
 log_path="${output_home}/log/"
-checkpoint_path="/groups/gcf51174/checkpoints/new-megatron-deepspeed/mpirun/${jobname}"
+checkpoint_path="/groups/gaf51217/fujii/checkpoints/megatron-deepspeed/175B/${jobname}-flash-attn-rope"
 ## Microsoft internal constraint: because tensorboard is logged by last rank,
 ## it's better to put the path in NFS instead of Blob.
 tensorboard_dir="${output_home}/tensorboard/"
@@ -192,7 +193,11 @@ megatron_options=" \
     --distributed-backend nccl \
     --fp16 \
     --seed ${seed} \
+    --load ${checkpoint_path} \
+    --save ${checkpoint_path} \
     --no-async-tensor-model-parallel-allreduce \
+    --use-rotary-position-embeddings \
+    --rotary-percent 0.25
     --use-flash-attn \
     --tensorboard-queue-size 1 \
     --log-timers-to-tensorboard \
@@ -256,10 +261,10 @@ mpirun -np $num_gpus \
   -x MASTER_ADDR=$MASTER_ADDR \
   -x MASTER_PORT=$MASTER_PORT \
   -bind-to none -map-by slot \
-  -x NCCL_DEBUG=INFO  -x PATH \
+  -x PATH \
   python pretrain_gpt.py \
   ${megatron_options} \
   --use-mpi \
-  --wandb-name "mpirun-flash-attn-${jobname}" \
+  --wandb-name "164B-rope-flash-attn-${jobname}" \
   ${data_options} \
   ${deepspeed_options}
