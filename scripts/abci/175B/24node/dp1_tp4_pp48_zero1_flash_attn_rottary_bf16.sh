@@ -1,6 +1,6 @@
 #!/bin/bash
 #$ -l rt_AF=24
-#$ -l h_rt=4:00:00
+#$ -l h_rt=50:00:00:00
 #$ -j y
 #$ -o outputs/175B/
 #$ -cwd
@@ -13,7 +13,7 @@ module load nccl/2.16/2.16.2-1
 module load hpcx/2.12
 
 # python virtualenv
-cd /home/acf15649kv/llm-jp/llm-jp-Megatron-DeepSpeed
+cd /bb/llm/gaf51275/llm-jp/Megatron-DeepSpeed
 source .env/bin/activate
 
 # GPT-3 175B
@@ -31,8 +31,8 @@ init_std=0.005
 
 sequence_length=2048
 
-## The main termination condition, original GPT-3 paper trains for 300B tokens.
-train_tokens_in_billion=300
+# LLM-jp 175B parameter model (ABCI 2023.10/5-12/4)
+train_tokens_in_billion=80
 train_tokens=$((${train_tokens_in_billion} * 1000 * 1000 * 1000))
 
 ## train_samples is another termination condition and also affect the number of
@@ -40,7 +40,7 @@ train_tokens=$((${train_tokens_in_billion} * 1000 * 1000 * 1000))
 ## above, and data efficiency techniques may change num tokens in some samples,
 ## so we just set this config large enough to make sure we have enough
 ## processed data and don't terminate by train_samples.
-train_samples=$((300 * 1000000000 * 2 / ${sequence_length}))
+train_samples=$((80 * 1000000000 * 2 / ${sequence_length}))
 
 ## Another wall-clock time termination condition in minutes. Set it large
 ## enough to avoid undesired early termination.
@@ -53,7 +53,7 @@ exit_duration=30000000
 ## used, there are more tokens per step. Thus we need to increase warmup tokens
 ## to make sure there are enough warmup steps, which is important for training
 ## stability.
-lr_warmup_tokens_in_million=3000
+lr_warmup_tokens_in_million=8000
 lr_warmup_tokens=$((${lr_warmup_tokens_in_million} * 1000000))
 ## Here we changed the LR decay tokens to align with total train tokens, since
 ## related works (e.g., https://arxiv.org/abs/2203.15556) find that setting the
@@ -116,14 +116,18 @@ host="${HOSTNAME}"
 seed=1234
 num_workers=0
 
-## Public the Pile dataset, can be downloaded at
-## https://mystic.the-eye.eu/public/AI/pile_neox/ or
-## https://the-eye.eu/public/AI/pile_neox/ Change data_home to where you
-## store the pile_text_document.bin and pile_text_document.idx.
+# dataset
+DATASET_PATH="/bb/llm/gaf51275/llm-jp/datasets/binarized/v1.0.2/code10k_en20k_ja30k.ver2.1"
 
-data_path="/home/acf15649kv/work/Megatron-DeepSpeed/dataset/BookCorpusDataset_text_document"
-vocab_path="dataset/gpt2-vocab.json"
-merge_path="dataset/gpt2-merges.txt"
+DATA_PATH=""
+# ja wiki
+for i in {0..13}; do
+  # pile (en)
+  DATA_PATH="${DATA_PATH} 1 ${DATASET_PATH}/ja_wiki/train_${i}_text_document"
+done
+
+data_path=$DATA_PATH
+vocab_path="/bb/llm/gaf51275/llm-jp/llm-ja-tokenizer/models/ver2/code10k_en20k_ja30k.ver2.1.model"
 
 prescale_grad="true"
 jobname="gpt_${model_size}B_tok${train_tokens_in_billion}B"
@@ -153,8 +157,8 @@ mkdir -p ${checkpoint_path}
 mkdir -p ${tensorboard_path}
 ###############################################################################
 data_options=" \
-    --vocab-file ${vocab_path} \
-    --merge-file ${merge_path} \
+    --tokenizer-model ${vocab_path} \
+    --tokenizer-type SentencePieceTokenizer \
     --data-path ${data_path} \
     --data-impl mmap"
 
@@ -247,11 +251,9 @@ echo "MASTER_ADDR=${MASTER_ADDR}"
 
 # hostfile
 HOSTFILE_NAME=./hostfile/hostfile_${JOB_ID}
-while read -r line
-do
+while read -r line; do
   echo "${line} slots=8"
-done < "$SGE_JOB_HOSTLIST" > "$HOSTFILE_NAME"
-
+done <"$SGE_JOB_HOSTLIST" >"$HOSTFILE_NAME"
 
 mpirun -np $num_gpus \
   --npernode $num_gpus_pernode \
