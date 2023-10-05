@@ -45,9 +45,14 @@ train_samples=$((80 * 1000000000 * 2 / ${sequence_length}))
 ## Another wall-clock time termination condition in minutes. Set it large
 ## enough to avoid undesired early termination.
 exit_duration=30000000
-
 ###############################################################################
-# lr configs
+### lr configs
+## lr warmup and decay duration.
+## Original GPT-3 paper uses 375M warmup tokens and 260B cosine decay tokens.
+## Here we increase the warmup tokens to 3B since when batch size warmup is not
+## used, there are more tokens per step. Thus we need to increase warmup tokens
+## to make sure there are enough warmup steps, which is important for training
+## stability.
 lr_warmup_tokens_in_million=8000
 lr_warmup_tokens=$((${lr_warmup_tokens_in_million} * 1000000))
 ## Here we changed the LR decay tokens to align with total train tokens, since
@@ -58,10 +63,14 @@ lr_decay_tokens_in_billion=${train_tokens_in_billion}
 lr_decay_tokens=$((${lr_decay_tokens_in_billion} * 1000000000))
 lr_decay_style="constant"
 ###############################################################################
-# Tensor Model Parallel
-mp_size=4
-# Pipeline parallelism
-pp_size=48
+### Parallelism configs
+## Model parallelism, 1 is no MP
+mp_size=8 # tensor model parallel size
+
+## Pipeline parallelism. To disable PP, set pp_size to 1 and no_pp to true.
+## Note that currently both curriculum learning and random-LTD are NOT
+## compatible with pipeline parallelism.
+pp_size=24
 no_pp="false"
 
 ## ZeRO-based data parallelism, stage=0 will disable ZeRO
