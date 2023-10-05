@@ -35,11 +35,6 @@ sequence_length=2048
 train_tokens_in_billion=80
 train_tokens=$((${train_tokens_in_billion} * 1000 * 1000 * 1000))
 
-## train_samples is another termination condition and also affect the number of
-## data samples to be indexed. Since we want to reach the train_tokens
-## above, and data efficiency techniques may change num tokens in some samples,
-## so we just set this config large enough to make sure we have enough
-## processed data and don't terminate by train_samples.
 train_samples=$((80 * 1000000000 * 2 / ${sequence_length}))
 
 ## Another wall-clock time termination condition in minutes. Set it large
@@ -100,7 +95,7 @@ eval_interval=100
 num_save=100
 estimated_train_iter=$((${train_tokens} / ${sequence_length} / ${global_batch_size}))
 # save_interval=$((${estimated_train_iter} / ${num_save}))
-save_interval=30
+save_interval=50
 
 ## Activation checkpointing saves GPU memory, but reduces training speed
 # activation_checkpoint="true"
@@ -117,7 +112,7 @@ seed=1234
 num_workers=0
 
 # dataset
-DATASET_PATH="/bb/llm/gaf51275/llm-jp/datasets/binarized/v1.0.2/code10k_en20k_ja30k.ver2.1"
+DATASET_PATH="/bb/llm/gaf51275/llm-jp/datasets/binarized/v1.0.2/code30k_en80k_ja120k.ver2.1"
 
 DATA_PATH=""
 # ja wiki
@@ -127,7 +122,7 @@ for i in {0..13}; do
 done
 
 data_path=$DATA_PATH
-vocab_path="/bb/llm/gaf51275/llm-jp/llm-ja-tokenizer/models/ver2/code10k_en20k_ja30k.ver2.1.model"
+vocab_path="/bb/llm/gaf51275/llm-jp/llm-ja-tokenizer/models/ver2/code30k_en80k_ja120k.ver2.model"
 
 prescale_grad="true"
 jobname="gpt_${model_size}B_tok${train_tokens_in_billion}B"
@@ -147,7 +142,7 @@ jobname="${jobname}_seed${seed}_rebase"
 
 output_home="outputs"
 log_path="${output_home}/log/"
-checkpoint_path="/groups/gaf51217/fujii/checkpoints/megatron-deepspeed/175B/${jobname}-flash-attn-rope_bf16-vocab_60K"
+checkpoint_path="/groups/gaf51217/fujii/checkpoints/megatron-deepspeed/175B/${jobname}-flash-attn-rope_bf16-vocab_230K/"
 ## Microsoft internal constraint: because tensorboard is logged by last rank,
 ## it's better to put the path in NFS instead of Blob.
 tensorboard_dir="${output_home}/tensorboard/"
@@ -267,6 +262,6 @@ mpirun -np $num_gpus \
   python pretrain_gpt.py \
   ${megatron_options} \
   --use-mpi \
-  --wandb-name "175B-60K-rope-flash-attn-bf16-${jobname}" \
+  --wandb-name "175B-230K-rope-flash-attn-bf16-${jobname}" \
   ${data_options} \
   ${deepspeed_options}
