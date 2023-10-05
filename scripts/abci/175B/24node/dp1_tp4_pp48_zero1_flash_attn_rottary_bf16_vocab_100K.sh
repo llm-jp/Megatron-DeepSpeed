@@ -103,7 +103,7 @@ activation_checkpoint="true"
 
 ## Whether or not log optimizer states (norms, max abs values) to tensorboard.
 ## This is not required for training and might save GPU memory when turned off.
-log_optimizer_state="true"
+log_optimizer_state="false"
 ###############################################################################
 ### Output and data configs
 current_time=$(date "+%Y.%m.%d_%H.%M.%S")
