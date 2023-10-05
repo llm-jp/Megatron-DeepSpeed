@@ -13,7 +13,7 @@ module load nccl/2.16/2.16.2-1
 module load hpcx/2.12
 
 # python virtualenv
-cd /home/acf15649kv/llm-jp/llm-jp-Megatron-DeepSpeed
+cd /bb/llm/gaf51275/llm-jp/Megatron-DeepSpeed
 source .env/bin/activate
 
 ## GPT-3 1.3B
@@ -142,7 +142,9 @@ jobname="${jobname}_seed${seed}_rebase"
 
 output_home="outputs"
 log_path="${output_home}/log/"
-checkpoint_path="/groups/gcf51174/checkpoints/new-megatron-deepspeed/mpirun/${jobname}"
+
+checkpoint_path="/bb/llm/gaf51275/llm-jp/checkpoints/megatron-deepspeed/${jobname}"
+
 ## Microsoft internal constraint: because tensorboard is logged by last rank,
 ## it's better to put the path in NFS instead of Blob.
 tensorboard_dir="${output_home}/tensorboard/"
