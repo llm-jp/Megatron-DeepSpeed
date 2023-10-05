@@ -122,7 +122,7 @@ for i in {0..13}; do
 done
 
 data_path=$DATA_PATH
-vocab_path="/bb/llm/gaf51275/llm-jp/llm-ja-tokenizer/models/ver2/code20k_en40k_ja60k.ver2.1"
+vocab_path="/bb/llm/gaf51275/llm-jp/llm-ja-tokenizer/models/ver2/code20k_en40k_ja60k.ver2.1.model"
 
 prescale_grad="true"
 jobname="gpt_${model_size}B_tok${train_tokens_in_billion}B"
@@ -142,7 +142,7 @@ jobname="${jobname}_seed${seed}_rebase"
 
 output_home="outputs"
 log_path="${output_home}/log/"
-checkpoint_path="/groups/gaf51217/fujii/checkpoints/megatron-deepspeed/175B/${jobname}-flash-attn-rope_bf16-vocab_100K/"
+checkpoint_path="/bb/llm/gaf51275/llm-jp/checkpoints/megatron-deepspeed/175B/${jobname}-flash-attn-rope_bf16-vocab_100K/"
 ## Microsoft internal constraint: because tensorboard is logged by last rank,
 ## it's better to put the path in NFS instead of Blob.
 tensorboard_dir="${output_home}/tensorboard/"
