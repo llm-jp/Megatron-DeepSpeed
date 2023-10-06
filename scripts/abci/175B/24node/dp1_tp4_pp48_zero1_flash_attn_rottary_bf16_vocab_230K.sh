@@ -122,7 +122,7 @@ for i in {0..13}; do
 done
 
 data_path=$DATA_PATH
-vocab_path="/bb/llm/gaf51275/llm-jp/llm-ja-tokenizer/models/ver2/code30k_en80k_ja120k.ver2.model"
+vocab_path="/bb/llm/gaf51275/llm-jp/llm-ja-tokenizer/models/ver2/code30k_en80k_ja120k.ver2.1.model"
 
 prescale_grad="true"
 jobname="gpt_${model_size}B_tok${train_tokens_in_billion}B"
