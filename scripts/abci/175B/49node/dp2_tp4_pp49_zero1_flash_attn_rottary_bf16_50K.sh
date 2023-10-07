@@ -79,7 +79,7 @@ dp_size=$((${num_gpus} / ${pp_size} / ${mp_size}))
 ## Make sure that batch_size <= global_batch_size*pp_size*mp_size/num_gpus
 ## Reduce it manually if GPU OOM
 # batch_size=$(( ${global_batch_size} / ${dp_size} ))
-batch_size=1
+batch_size=2
 ###############################################################################
 ### Misc configs
 log_interval=1
@@ -138,7 +138,7 @@ jobname="${jobname}_seed${seed}_rebase"
 
 output_home="outputs"
 log_path="${output_home}/log/"
-checkpoint_path="/bb/llm/gaf51275/llm-jp/checkpoints/megatron-deepspeed/175B/49node/${jobname}-flash-attn-rope_bf16-vocab_60K"
+checkpoint_path="/bb/llm/gaf51275/llm-jp/checkpoints/megatron-deepspeed/175B/49node/${jobname}-flash-attn-rope_bf16-vocab_50K"
 ## Microsoft internal constraint: because tensorboard is logged by last rank,
 ## it's better to put the path in NFS instead of Blob.
 tensorboard_dir="${output_home}/tensorboard/"
