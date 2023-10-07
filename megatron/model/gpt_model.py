@@ -186,7 +186,7 @@ def CrossEntropy(output, labels):
     return loss
 
 
-class GPTModelPipe(PipelineModule,MegatronModule):
+class GPTModelPipe(PipelineModule, MegatronModule):
     """GPT-2 Language model."""
 
     def __init__(self,
@@ -291,8 +291,20 @@ class GPTModelPipe(PipelineModule,MegatronModule):
                                              num_mp=mpu.get_tensor_model_parallel_world_size(),
                                              num_dp=mpu.get_data_parallel_world_size())
 
+        # here one can extend the regex to include more layers to be counted towards partitioning,
+        # e.g. 'type:transformer|embedding' will add up all the transformer blocks and also the first
+        # and last embedding layers and then partition that transformers+2 layers - so to get a good
+        # balance you may want to use less transformer layers
+        #
+        # caveat emptor: the current implementation of PP fails unless each stage has at least one
+        # transformer layer
+        if args.pp_partition_method is not None:
+            partition_method: str = args.pp_partition_method
+        else:
+            partition_method = 'type:transformer'
+
         super().__init__(layers=self.specs,
                          loss_fn=CrossEntropy,
                          topology=topo,
                          activation_checkpoint_interval=interval,
-                         partition_method='type:transformer')
+                         partition_method=partition_method)
