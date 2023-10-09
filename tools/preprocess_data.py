@@ -80,6 +80,8 @@ class Encoder(object):
         data = json.loads(json_line)
         ids = {}
         lens = {}
+        num_tokens: int = 0
+
         for key in self.args.json_keys:
             text = data[key]
             if isinstance(text, list):
@@ -93,11 +95,15 @@ class Encoder(object):
                 if len(sentence_ids) > 0:
                     doc_ids.extend(sentence_ids)
                     sentence_lens.append(len(sentence_ids))
+                    num_tokens += len(sentence_ids)  # type: ignore
+
             if len(doc_ids) > 0 and self.args.append_eod:
                 doc_ids.append(Encoder.tokenizer.eod)
+                num_tokens += 1
+
             ids[key] = doc_ids
             lens[key] = sentence_lens
-        return ids, lens, len(json_line)
+        return ids, lens, len(json_line), num_tokens
 
 
 class Partition(object):
@@ -105,12 +111,13 @@ class Partition(object):
         self.args = args
         self.workers = workers
 
-    def print_processing_stats(self, count, proc_start, total_bytes_processed):
+    def print_processing_stats(self, count, proc_start, total_bytes_processed, total_tokens_processed):
         if count % self.args.log_interval == 0:
             current = time.time()
             elapsed = current - proc_start
-            mbs = total_bytes_processed/elapsed/1024/1024
+            mbs = total_bytes_processed / elapsed / 1024 / 1024
             print(f"Processed {count} documents",
+                  f"{total_tokens_processed} tokens",
                   f"({count/elapsed} docs/s, {mbs} MB/s).",
                   file=sys.stderr)
 
@@ -166,15 +173,20 @@ class Partition(object):
         startup_end = time.time()
         proc_start = time.time()
         total_bytes_processed = 0
+        total_tokens_processed = 0
+
         print("Time to startup:", startup_end - startup_start)
-        for i, (doc, sentence_lens, bytes_processed) in enumerate(encoded_docs, start=1):
+        for i, (doc, sentence_lens, bytes_processed, tokens_processed) in enumerate(encoded_docs, start=1):
             total_bytes_processed += bytes_processed
+            total_tokens_processed += tokens_processed
+
             for key in doc.keys():
                 builders[key].add_doc(doc[key], sentence_lens[key])
-            self.print_processing_stats(i, proc_start, total_bytes_processed)
+            self.print_processing_stats(i, proc_start, total_bytes_processed, total_tokens_processed)
 
         fin.close()
         builders[key].finalize(output_idx_files[key])
+        print(f"Processed Total {total_tokens_processed} tokens", file=sys.stderr)
 
 
 def get_args():
