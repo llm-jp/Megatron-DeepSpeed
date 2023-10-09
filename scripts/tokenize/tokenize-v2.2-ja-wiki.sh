@@ -29,19 +29,29 @@ mkdir -p $OUTPUT_DIR
 MODEL_DIR=/bb/llm/gaf51275/llm-jp/llm-ja-tokenizer/models/ver2
 MODEL_PATH=$MODEL_DIR/code20K_en40K_ja60K.ver2.2.model
 
-# Tokenize and binarize
+# merge files (en-pile)
+MERGED_FILE_DIR=/bb/llm/gaf51275/llm-jp/datasets/llm-jp-corpus/108b-merged
+mkdir -p $MERGED_FILE_DIR
 
-# refined en-wiki & en-wiki
-for file in $INPUT_DIR/*en_wiki*; do
+MERGED_FILE_PATH="$MERGED_FILE_DIR/ja_wiki.jsonl"
+
+if [ -f "$MERGED_FILE_PATH" ]; then
+  # ファイルの内容を初期化
+  >"$MERGED_FILE_PATH"
+fi
+
+for file in $INPUT_DIR/*ja_wiki*; do
   if [ -f "$file" ]; then
-    python tools/preprocess_data.py \
-      --input "$file" \
-      --output-prefix "$OUTPUT_DIR/$(basename "$file" .${file##*.})" \
-      --tokenizer-model "$MODEL_PATH" \
-      --dataset-impl mmap \
-      --tokenizer-type SentencePieceTokenizer \
-      --workers 64 \
-      --append-eod
+    cat "$file" >>$MERGED_FILE_PATH
   fi
 done
 
+# Tokenize and binarize
+python tools/preprocess_data.py \
+  --input $MERGED_FILE_PATH \
+  --output-prefix $OUTPUT_DIR/ja_wiki \
+  --tokenizer-model $MODEL_PATH \
+  --dataset-impl mmap \
+  --tokenizer-type SentencePieceTokenizer \
+  --workers 64 \
+  --append-eod
