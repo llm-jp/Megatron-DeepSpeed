@@ -183,13 +183,20 @@ class OptimizerParamScheduler(object):
             print_rank_0(' > overriding {} value to {}'.format(name, cls_value))
             return cls_value
 
+        # if not self.use_checkpoint_opt_param_scheduler:
+        #     assert cls_value == sd_value, \
+        #         f'OptimizerParamScheduler: class input value {cls_value} and checkpoint' \
+        #         f'value {sd_value} for {name} do not match'
+        # print_rank_0(' > using checkpoint value {} for {}'.format(sd_value,
+        #                                                           name))
         if not self.use_checkpoint_opt_param_scheduler:
-            assert cls_value == sd_value, \
-                f'OptimizerParamScheduler: class input value {cls_value} and checkpoint' \
-                f'value {sd_value} for {name} do not match'
-        print_rank_0(' > using checkpoint value {} for {}'.format(sd_value,
-                                                                  name))
-        return sd_value
+            if cls_value != sd_value:
+                print_rank_0(f'OptimizerParamScheduler: class input value {cls_value} and checkpoint' \
+                             f'value {sd_value} for {name} do not match??')
+        print_rank_0(' > using checkpoint cls_value {} (not sd {}) for {} '.format(cls_value, sd_value,
+                                                                                   name))
+        return cls_value
+        #return sd_value
 
 
     def load_state_dict(self, sd):
