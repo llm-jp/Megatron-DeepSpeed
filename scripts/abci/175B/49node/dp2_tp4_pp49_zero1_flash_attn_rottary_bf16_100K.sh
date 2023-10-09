@@ -5,6 +5,8 @@
 #$ -o outputs/175B/49node/
 #$ -cwd
 
+set -e
+
 # module load
 source /etc/profile.d/modules.sh
 module load cuda/11.8/11.8.0
@@ -105,58 +107,26 @@ seed=1234
 num_workers=1
 
 # train dataset
-DATASET_PATH=/bb/llm/gaf51275/llm-jp/datasets/binarized/v1.0.2/code20K_en40K_ja60K.ver2.2
+DATASET_PATH="/bb/llm/gaf51275/llm-jp/datasets/binarized/v1.0.2/code20K_en40K_ja60K.ver2.2"
 
 DATA_PATH=""
 
 # ja wiki
-for file in $DATASET_PATH/*ja_wiki*; do
-  if [ -f "$file" ]; then
-    DATA_PATH="${DATA_PATH} 1 "$DATASET_PATH/$(basename "$file" .${file##*.})""
-  fi
-done
-
+DATA_PATH="${DATA_PATH} 2063613609 $DATASET_PATH/ja_wiki_text_document"
 # ja cc
-for file in $DATASET_PATH/*ja_cc*; do
-  if [ -f "$file" ]; then
-    DATA_PATH="${DATA_PATH} 1 "$DATASET_PATH/$(basename "$file" .${file##*.})""
-  fi
-done
-
+DATA_PATH="${DATA_PATH} 51268342277 $DATASET_PATH/ja_cc_text_document"
 # en wiki
-for file in $DATASET_PATH/*en_wiki*; do
-  if [ -f "$file" ]; then
-    DATA_PATH="${DATA_PATH} 1 "$DATASET_PATH/$(basename "$file" .${file##*.})""
-  fi
-done
-
+DATA_PATH="${DATA_PATH} 6205632984 $DATASET_PATH/en_wiki_text_document"
 # en pile
-for file in $DATASET_PATH/*en_pile*; do
-  if [ -f "$file" ]; then
-    DATA_PATH="${DATA_PATH} 1 "$DATASET_PATH/$(basename "$file" .${file##*.})""
-  fi
-done
-
+DATA_PATH="${DATA_PATH} 39710501236 $DATASET_PATH/en_pile_text_document"
 # code stack
-for file in $DATASET_PATH/*code_stack*; do
-  if [ -f "$file" ]; then
-    DATA_PATH="${DATA_PATH} 1 "$DATASET_PATH/$(basename "$file" .${file##*.})""
-  fi
-done
+DATA_PATH="${DATA_PATH} 3323268568 $DATASET_PATH/code_stack_text_document"
 
 data_path=$DATA_PATH
 
 # validation dataset
-VALIDATION_DATASET=/bb/llm/gaf51275/llm-jp/datasets/binarized/v1.0.2/code20K_en40K_ja60K.ver2.2/validation
-
-VALIDATION_DATA_PATH=""
-
-for file in $VALIDATION_DATASET/validation*; do
-  if [ -f "$file" ]; then
-    VALIDATION_DATA_PATH="${VALIDATION_DATA_PATH} 1 "$VALIDATION_DATASET/$(basename "$file" .${file##*.})""
-  fi
-done
-
+VALIDATION_DATASET="/bb/llm/gaf51275/llm-jp/datasets/binarized/v1.0.2/code20K_en40K_ja60K.ver2.2/validation"
+VALIDATION_DATA_PATH="${VALIDATION_DATASET}/validation_text_document"
 
 # job name setting
 prescale_grad="true"
