@@ -32,7 +32,7 @@ init_std=0.005
 sequence_length=2048
 
 # LLM-jp 175B parameter model (ABCI 2023.10/5-12/4)
-train_tokens_in_billion=80
+train_tokens_in_billion=108
 train_tokens=$((${train_tokens_in_billion} * 1000 * 1000 * 1000))
 
 ## train_samples is another termination condition and also affect the number of
@@ -40,7 +40,7 @@ train_tokens=$((${train_tokens_in_billion} * 1000 * 1000 * 1000))
 ## above, and data efficiency techniques may change num tokens in some samples,
 ## so we just set this config large enough to make sure we have enough
 ## processed data and don't terminate by train_samples.
-train_samples=$((80 * 1000000000 * 2 / ${sequence_length}))
+train_samples=$((108 * 1000000000 * 2 / ${sequence_length}))
 
 ## Another wall-clock time termination condition in minutes. Set it large
 ## enough to avoid undesired early termination.
@@ -48,7 +48,7 @@ exit_duration=30000000
 
 ###############################################################################
 # lr configs
-lr_warmup_tokens_in_million=8000
+lr_warmup_tokens_in_million=10800
 lr_warmup_tokens=$((${lr_warmup_tokens_in_million} * 1000000))
 ## Here we changed the LR decay tokens to align with total train tokens, since
 ## related works (e.g., https://arxiv.org/abs/2203.15556) find that setting the
@@ -83,15 +83,12 @@ batch_size=2
 ###############################################################################
 ### Misc configs
 log_interval=1
+
 eval_iters=10
 eval_interval=100
-# num_save controls how frequent to save checkpoint. num_save=20 means that a
-# checkpoint will be saved every 5% of training. For longer training you would
-# want larger num_save to save more frequently, and vice versa.
-num_save=100
+
 estimated_train_iter=$((${train_tokens} / ${sequence_length} / ${global_batch_size}))
-# save_interval=$((${estimated_train_iter} / ${num_save}))
-save_interval=100
+save_interval=250
 
 ## Activation checkpointing saves GPU memory, but reduces training speed
 # activation_checkpoint="true"
@@ -105,21 +102,63 @@ log_optimizer_state="true"
 current_time=$(date "+%Y.%m.%d_%H.%M.%S")
 host="${HOSTNAME}"
 seed=1234
-num_workers=0
+num_workers=1
 
-# dataset
-DATASET_PATH="/bb/llm/gaf51275/llm-jp/datasets/binarized/v1.0.2/code20k_en40k_ja60k.ver2.1"
+# train dataset
+DATASET_PATH=/bb/llm/gaf51275/llm-jp/datasets/binarized/v1.0.2/code20K_en40K_ja60K.ver2.2
 
 DATA_PATH=""
+
 # ja wiki
-for i in {0..13}; do
-  # pile (en)
-  DATA_PATH="${DATA_PATH} 1 ${DATASET_PATH}/ja_wiki/train_${i}_text_document"
+for file in $DATASET_PATH/*ja_wiki*; do
+  if [ -f "$file" ]; then
+    DATA_PATH="${DATA_PATH} 1 "$DATASET_PATH/$(basename "$file" .${file##*.})""
+  fi
+done
+
+# ja cc
+for file in $DATASET_PATH/*ja_cc*; do
+  if [ -f "$file" ]; then
+    DATA_PATH="${DATA_PATH} 1 "$DATASET_PATH/$(basename "$file" .${file##*.})""
+  fi
+done
+
+# en wiki
+for file in $DATASET_PATH/*en_wiki*; do
+  if [ -f "$file" ]; then
+    DATA_PATH="${DATA_PATH} 1 "$DATASET_PATH/$(basename "$file" .${file##*.})""
+  fi
+done
+
+# en pile
+for file in $DATASET_PATH/*en_pile*; do
+  if [ -f "$file" ]; then
+    DATA_PATH="${DATA_PATH} 1 "$DATASET_PATH/$(basename "$file" .${file##*.})""
+  fi
+done
+
+# code stack
+for file in $DATASET_PATH/*code_stack*; do
+  if [ -f "$file" ]; then
+    DATA_PATH="${DATA_PATH} 1 "$DATASET_PATH/$(basename "$file" .${file##*.})""
+  fi
 done
 
 data_path=$DATA_PATH
-vocab_path="/bb/llm/gaf51275/llm-jp/llm-ja-tokenizer/models/ver2/code20k_en40k_ja60k.ver2.1.model"
 
+# validation dataset
+VALIDATION_DATASET=/bb/llm/gaf51275/llm-jp/datasets/binarized/v1.0.2/code20K_en40K_ja60K.ver2.2/validation
+
+VALIDATION_DATA_PATH=""
+
+for file in $VALIDATION_DATASET/validation*; do
+  if [ -f "$file" ]; then
+    VALIDATION_DATA_PATH="${VALIDATION_DATA_PATH} 1 "$VALIDATION_DATASET/$(basename "$file" .${file##*.})""
+  fi
+done
+
+
+# job name setting
 prescale_grad="true"
 jobname="gpt_${model_size}B_tok${train_tokens_in_billion}B"
 jobname="${jobname}_lr${lr}_min${min_lr}_w${lr_warmup_tokens_in_million}M_d${lr_decay_tokens_in_billion}B_${lr_decay_style}"
@@ -138,7 +177,7 @@ jobname="${jobname}_seed${seed}_rebase"
 
 output_home="outputs"
 log_path="${output_home}/log/"
-checkpoint_path="/bb/llm/gaf51275/llm-jp/checkpoints/megatron-deepspeed/175B/49node/${jobname}-flash-attn-rope_bf16-vocab_100K"
+checkpoint_path="/bb/llm/gaf51275/llm-jp/checkpoints/megatron-deepspeed/175B/ABCI/49node/${jobname}-flash-attn-rope_bf16-vocab_100K"
 ## Microsoft internal constraint: because tensorboard is logged by last rank,
 ## it's better to put the path in NFS instead of Blob.
 tensorboard_dir="${output_home}/tensorboard/"
@@ -148,9 +187,10 @@ mkdir -p ${checkpoint_path}
 mkdir -p ${tensorboard_path}
 ###############################################################################
 data_options=" \
-    --tokenizer-model ${vocab_path} \
+    --tokenizer-model /bb/llm/gaf51275/llm-jp/llm-ja-tokenizer/models/ver2/code20K_en40K_ja60K.ver2.2.model \
     --tokenizer-type SentencePieceTokenizer \
-    --data-path ${data_path} \
+    --train-data-path ${data_path} \
+    --valid-data-path ${VALIDATION_DATA_PATH} \
     --data-impl mmap"
 
 ## If CL is used, make sure to set "--split" the same as what you used during
@@ -177,7 +217,6 @@ megatron_options=" \
     --lr ${lr} \
     --min-lr ${min_lr} \
     --lr-decay-style ${lr_decay_style} \
-    --split 949,50,1 \
     --log-interval ${log_interval} \
     --eval-interval ${eval_interval} \
     --eval-iters ${eval_iters} \
@@ -259,6 +298,6 @@ mpirun -np $num_gpus \
   python pretrain_gpt.py \
   ${megatron_options} \
   --use-mpi \
-  --wandb-name "175B-100K-rope-flash-attn-bf16-${jobname}" \
+  --wandb-name "175B-100K-${jobname}" \
   ${data_options} \
   ${deepspeed_options}
