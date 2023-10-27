@@ -2,7 +2,7 @@
 #$ -l rt_AF=2
 #$ -l h_rt=5:00:00
 #$ -j y
-#$ -o outputs/
+#$ -o outputs/1.3B/
 #$ -cwd
 
 # module load
@@ -13,7 +13,7 @@ module load nccl/2.16/2.16.2-1
 module load hpcx/2.12
 
 # python virtualenv
-cd /home/acf15649kv/llm-jp/llm-jp-Megatron-DeepSpeed
+cd /bb/llm/gaf51275/llm-jp/Megatron-DeepSpeed
 source .env/bin/activate
 
 ## GPT-3 1.3B
@@ -99,7 +99,7 @@ eval_interval=100
 num_save=100
 estimated_train_iter=$((${train_tokens} / ${sequence_length} / ${global_batch_size}))
 # save_interval=$((${estimated_train_iter} / ${num_save}))
-save_interval=100
+save_interval=30
 
 ## Activation checkpointing saves GPU memory, but reduces training speed
 # activation_checkpoint="true"
@@ -142,7 +142,7 @@ jobname="${jobname}_seed${seed}_rebase"
 
 output_home="outputs"
 log_path="${output_home}/log/"
-checkpoint_path="/groups/gaf51217/fujii/checkpoints/megatron-deepspeed/${jobname}-no-slw"
+checkpoint_path="/groups/gaf51217/fujii/checkpoints/megatron-deepspeed/${jobname}-rope-flash"
 ## Microsoft internal constraint: because tensorboard is logged by last rank,
 ## it's better to put the path in NFS instead of Blob.
 tensorboard_dir="${output_home}/tensorboard/"
@@ -192,9 +192,12 @@ megatron_options=" \
     --distributed-backend nccl \
     --bf16 \
     --seed ${seed} \
-    --load ${checkpoint_path} \
     --save ${checkpoint_path} \
+    --load ${checkpoint_path} \
     --no-async-tensor-model-parallel-allreduce \
+    --use-rotary-position-embeddings \
+    --rotary-percent 0.25
+    --use-flash-attn \
     --tensorboard-queue-size 1 \
     --log-timers-to-tensorboard \
     --log-batch-size-to-tensorboard \
@@ -261,6 +264,6 @@ mpirun -np $num_gpus \
   python pretrain_gpt.py \
   ${megatron_options} \
   --use-mpi \
-  --wandb-name "abci-no-slw-${jobname}" \
+  --wandb-name "1.3B-${jobname}" \
   ${data_options} \
   ${deepspeed_options}
