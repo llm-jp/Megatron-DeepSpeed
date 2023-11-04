@@ -24,7 +24,6 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__),
 
 from megatron import get_args
 from megatron import print_rank_0
-from megatron import get_tokenizer
 from megatron.core import mpu
 from megatron.checkpointing import load_checkpoint
 from megatron.initialize import initialize_megatron
@@ -33,11 +32,10 @@ from megatron.training import get_model
 from megatron.text_generation_utils import generate_and_write_samples_unconditional
 from megatron.text_generation_utils import generate_samples_input_from_file
 from megatron.text_generation_utils import generate_samples_interactive
-import deepspeed
-import torch
-
 from megatron.arguments import core_transformer_config_from_args
-from megatron import get_args
+import torch
+import torch.distributed as torch_distributed
+
 
 def model_provider(pre_process=True, post_process=True):
     """Build the model."""
@@ -48,7 +46,7 @@ def model_provider(pre_process=True, post_process=True):
     print_rank_0('building GPT model ...')
     model = GPTModel(config=config, num_tokentypes=0, parallel_output=False,
                      pre_process=pre_process, post_process=post_process,
-                     return_moe_loss=False) # we need to set "return_moe_loss" for the inference_mode
+                     return_moe_loss=False)  # we need to set "return_moe_loss" for the inference_mode
     return model
 
 
@@ -84,6 +82,7 @@ def add_text_generate_args(parser):
 
     return parser
 
+
 def print_latency(latency_set, title=""):
     # 10 warmup queries
     latency_set = latency_set[10:]
@@ -110,6 +109,7 @@ def print_latency(latency_set, title=""):
         print("\tP95 Latency: {0:8.2f} ms".format(p95 * 1000))
         print("\tP99 Latency: {0:8.2f} ms".format(p99 * 1000))
         print("\t999 Latency: {0:8.2f} ms".format(p999 * 1000))
+
 
 def main():
     """Main program."""
@@ -144,23 +144,21 @@ def main():
     # Generate samples.
     if args.num_samples == 0:
         args.micro_batch_size = 1
-        if args.sample_input_file != None:
+        if args.sample_input_file is not None:
             generate_samples_input_from_file(model)
         else:
             generate_samples_interactive(model)
     else:
         generate_and_write_samples_unconditional(model, latencies, single_token_latency, model_latencies)
 
-
-    #if torch.cuda.current_device() == 0:
-    if torch.distributed.get_rank() == 0:
+    # if torch.cuda.current_device() == 0:
+    if torch_distributed.get_rank() == 0:
         print_latency(latencies)
         print_latency(model_latencies, "model_latencies")
         print_latency(single_token_latency, "single_token_latency")
 
 
 def ds_inference(model, args):
-    import megatron.model as mm
     engine = deepspeed.init_inference(model=model,
                                       mp_size=args.tensor_model_parallel_size,
                                       tensor_parallel={"mpu": mpu},
@@ -171,6 +169,6 @@ def ds_inference(model, args):
 
     return engine.module
 
-if __name__ == "__main__":
 
+if __name__ == "__main__":
     main()

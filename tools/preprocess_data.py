@@ -2,7 +2,6 @@
 
 """Processing large data for pretraining."""
 import argparse
-import math
 import json
 import os
 import sys
@@ -11,8 +10,6 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__),
 import time
 import gzip
 import glob
-import torch
-import numpy as np
 import multiprocessing
 try:
     import nltk
@@ -36,6 +33,7 @@ class CustomLanguageVars(nltk.tokenize.punkt.PunktLanguageVars):
             |
             (?P<next_tok>\S+)     #  <-- Normally you would have \s+ here
         ))"""
+
 
 class IdentitySplitter(object):
     def tokenize(self, *text):
