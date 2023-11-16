@@ -171,27 +171,25 @@ def main():
     
     from IPython import embed; embed()
     # model(input_ids, position_ids, attention_mask)
-
-
-
+    
         
     # Generate samples.
-    if args.num_samples == 0:
-        args.micro_batch_size = 1
-        if args.sample_input_file != None:
-            generate_samples_input_from_file(model)
-        else:
-            generate_samples_interactive(model)
-    else:
-        generate_and_write_samples_unconditional(model, latencies, single_token_latency, model_latencies)
+    # if args.num_samples == 0:
+    #     args.micro_batch_size = 1
+    #     if args.sample_input_file != None:
+    #         generate_samples_input_from_file(model)
+    #     else:
+    #         generate_samples_interactive(model)
+    # else:
+    #     generate_and_write_samples_unconditional(model, latencies, single_token_latency, model_latencies)
 
 
-    #if torch.cuda.current_device() == 0:
-    if torch.distributed.get_rank() == 0:
-        print_latency(latencies)
-        print_latency(model_latencies, "model_latencies")
-        print_latency(single_token_latency, "single_token_latency")
-
+    # #if torch.cuda.current_device() == 0:
+    # if torch.distributed.get_rank() == 0:
+    #     print_latency(latencies)
+    #     print_latency(model_latencies, "model_latencies")
+    #     print_latency(single_token_latency, "single_token_latency")
+    
 
 def ds_inference(model, args):
     import megatron.model as mm
