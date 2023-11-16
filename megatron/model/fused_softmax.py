@@ -143,7 +143,7 @@ class FusedScaleMaskSoftmax(nn.Module):
     def forward(self, input, mask):
         # [b, np, sq, sk]
         assert input.dim() == 4
-
+        
         if self.is_kernel_available(mask, *input.size()):
             return self.forward_fused_softmax(input, mask)
         else:
@@ -195,7 +195,20 @@ class FusedScaleMaskSoftmax(nn.Module):
 
         if self.scale is not None:
             input = input * self.scale
+            
+        # Added by keito kudo
+        if self.attn_mask_type.value == AttnMaskType.causal.value:
+            causal_mask = torch.triu(
+                torch.ones(
+                    input.size(-2), input.size(-1), device=input.device, dtype=torch.bool
+                ),
+                1
+            )
+            input = input.masked_fill(causal_mask, -10000.0)
+            
         mask_output = self.mask_func(input, mask) if mask is not None else input
+
+        
         probs = torch.nn.Softmax(dim=-1)(mask_output)
 
         if self.input_in_float16 and self.softmax_in_fp32:
@@ -203,9 +216,8 @@ class FusedScaleMaskSoftmax(nn.Module):
                 probs = probs.half()
             else:
                 probs = probs.bfloat16()
-
         return probs
-
+    
     @staticmethod
     def get_batch_per_block(sq, sk, b, np):
         import scaled_masked_softmax_cuda

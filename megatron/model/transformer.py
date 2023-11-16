@@ -353,7 +353,6 @@ class CoreAttention(MegatronModule):
         new_context_layer_shape = context_layer.size()[:-2] + \
             (self.hidden_size_per_partition,)
         context_layer = context_layer.view(*new_context_layer_shape)
-
         return context_layer
 
 
@@ -623,7 +622,7 @@ class ParallelAttention(MegatronModule):
         # =====================
         # Query, Key, and Value
         # =====================
-
+        
         if self.attention_type == AttnType.self_attn and not self.use_gqa:
             # Attention heads [sq, b, h] --> [sq, b, (np * 3 * hn)]
             mixed_x_layer, _ = self.query_key_value(hidden_states)
@@ -1895,12 +1894,12 @@ class ParallelTransformer(MegatronModule):
 
                     for index in range(self.num_layers):
                         layer = self._get_layer(index)
-
+                        
                         hidden_states = layer(
                             hidden_states,
                             attention_mask,
                             **forward_kwargs)
-
+                        
                         # First Retro decoder layer returns both hidden_states
                         # and retriever_output. Make retriever_output available
                         # to subsequence Retro layers.

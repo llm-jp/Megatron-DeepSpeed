@@ -51,10 +51,11 @@ def initialize_megatron(extra_args_provider=None, args_defaults={},
     # set global args, build tokenizer, and set adlr-autoresume,
     # tensorboard-writer, and timers.
     set_global_variables(args)
-
+    
     # torch.distributed initialization
     def finish_mpu_init():
         args = get_args()
+        
         # Pytorch distributed.
         _initialize_distributed()
         
@@ -64,6 +65,7 @@ def initialize_megatron(extra_args_provider=None, args_defaults={},
         _set_random_seed(args.seed, args.data_parallel_random_init)
 
     args = get_args()
+    
     if  args.lazy_mpu_init:
         # TODO is this still a necessary option?
         args.use_cpu_initialization=True
@@ -187,6 +189,7 @@ def setup_deepspeed_random_and_activation_checkpointing(args):
 def _initialize_distributed():
     """Initialize torch.distributed and core model parallel."""
     args = get_args()
+    
     device_count = get_accelerator().device_count()
     if torch.distributed.is_initialized():
 

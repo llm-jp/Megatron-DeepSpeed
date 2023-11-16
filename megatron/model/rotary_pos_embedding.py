@@ -49,8 +49,11 @@ def apply_rotary_pos_emb(t, freqs):
     rot_dim = freqs.shape[-1]
     # ideally t_pass is empty so rotary pos embedding is applied to all tensor t
     t, t_pass = t[..., :rot_dim], t[..., rot_dim:]
-
+    
+    # Added by keitokudo for inference phase
+    freqs = freqs[:t.size(0), :, :, :]
     # first part is cosine component
     # second part is sine component, need to change signs with _rotate_half method
+    #breakpoint()
     t = (t * freqs.cos()) + (_rotate_half(t) * freqs.sin())
     return torch.cat((t, t_pass), dim=-1)

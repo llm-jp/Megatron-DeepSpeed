@@ -79,9 +79,9 @@ def add_text_generate_args(parser):
     group.add_argument("--recompute", action='store_true',
                        help='During generation recompute all attention '
                        'instead of using previously computed keys/values.')
-    group.add_argument("--local_rank", type=int, default=0,
-                       help='local_rank')
-
+    # group.add_argument("--local_rank", type=int, default=0,
+    #                    help='local_rank')
+    
     return parser
 
 def print_latency(latency_set, title=""):
@@ -116,31 +116,65 @@ def main():
     latencies = []
     model_latencies = []
     single_token_latency = []
-
-    initialize_megatron(extra_args_provider=add_text_generate_args,
-                        args_defaults={'tokenizer_type': 'GPT2BPETokenizer',
-                                       'no_load_rng': True,
-                                       'no_load_optim': True})
-
+    
+    initialize_megatron(
+        extra_args_provider=add_text_generate_args,
+        args_defaults={
+            'tokenizer_type': 'GPT2BPETokenizer',
+            'no_load_rng': True,
+            'no_load_optim': True},
+        allow_no_cuda=False,
+    )
     args = get_args()
 
     if args.num_layers_per_virtual_pipeline_stage is not None:
         print("Interleaved pipeline schedule is not yet supported for text generation.")
         exit()
-
+        
     # Set up model and load checkpoint.
     model = get_model(model_provider)
-
+    
     if args.load is not None:
-        _ = load_checkpoint(model, None, None)
-
+        flag = load_checkpoint(model, None, None)
+        assert flag, 'Fail to load the checkpoint {}.'.format(args.load)
+        
     assert len(model) == 1, "Above condition should have caught this"
     model = model[0]
+
 
     if args.ds_inference:
         model = ds_inference(model, args)
         print('> DeepSpeed Inference engine initialized')
 
+    
+    input_ids = torch.tensor([[0, 1, 2]], dtype=torch.long)
+    position_ids = torch.tensor([[0, 1, 2]], dtype=torch.long)
+    attention_mask = torch.tensor([[0,0,0]], dtype=torch.bool)
+    
+    input_ids = input_ids.cuda()
+    position_ids = position_ids.cuda()
+    attention_mask = attention_mask.cuda()
+
+    # from collections import namedtuple
+    # inference_params = namedtuple(
+    #     "inference_params",
+    #     [
+    
+    model.eval()
+    output = model(
+        input_ids,
+        position_ids,
+        attention_mask,
+        # inference_params=inference_params
+    )
+
+    
+    from IPython import embed; embed()
+    # model(input_ids, position_ids, attention_mask)
+
+
+
+        
     # Generate samples.
     if args.num_samples == 0:
         args.micro_batch_size = 1

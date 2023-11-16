@@ -226,6 +226,7 @@ class Embedding(MegatronModule):
         if self.embedding_weights_in_fp32:
             self.word_embeddings = self.word_embeddings.to(torch.float32)
         words_embeddings = self.word_embeddings(input_ids)
+        
         if self.embedding_weights_in_fp32:
             words_embeddings = words_embeddings.to(self.params_dtype)
             self.word_embeddings = self.word_embeddings.to(self.params_dtype)
@@ -535,7 +536,7 @@ class TransformerLanguageModel(MegatronModule):
                     self.rotary_pos_emb(inference_params.max_sequence_len)
             else:
                 rotary_pos_emb = self.rotary_pos_emb(self.seq_length)
-
+        
         # Run encoder.
         if enc_hidden_states is None:
             if self.encoder is not None:
@@ -572,7 +573,7 @@ class TransformerLanguageModel(MegatronModule):
                                            dec_position_ids)
         else:
             decoder_input = None
-
+        
         # Run decoder.
         decoder_output, *moe_losses = self.decoder(
             decoder_input,

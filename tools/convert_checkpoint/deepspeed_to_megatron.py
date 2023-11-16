@@ -2,15 +2,31 @@
 
 import argparse
 import os
+import sys
+
 import torch
 from collections import OrderedDict
-from .deepspeed_checkpoint import ARGS_KEY, DeepSpeedCheckpoint
+#from .deepspeed_checkpoint import ARGS_KEY, DeepSpeedCheckpoint
+from deepspeed_checkpoint import ARGS_KEY, DeepSpeedCheckpoint
+
+sys.path.append(
+    os.path.abspath(
+        os.path.join(
+            os.path.dirname(__file__),
+            os.path.pardir,
+            os.path.pardir,
+        )
+    )
+)
+import megatron
+
 
 MODEL_KEY = 'model'
 ARGS_KEY = 'args'
 LANGUGAGE_MODEL_KEY = 'language_model'
 EMBEDDING_KEY = 'embedding'
 ENCODER_KEY = 'encoder'
+
 WORD_EMBEDDINGS_FOR_HEAD_KEY = 'word_embeddings_for_head'
 WORD_EMBEDDINGS_KEY = 'word_embeddings'
 FINAL_LAYER_NORM_KEY ='final_layernorm'

@@ -3,6 +3,7 @@
 import os
 import torch
 import json
+import shutil
 
 from deepspeed_checkpoint import DeepSpeedCheckpoint
 from deepspeed_to_megatron import _create_rank_checkpoint, parse_arguments
@@ -10,7 +11,7 @@ from deepspeed_to_megatron import _create_rank_checkpoint, parse_arguments
 # the import was tested to work with this version
 # https://github.com/huggingface/transformers/commit/0af901e83 if it diverges we may consider
 # copying that version here instead
-from transformers.models.megatron_gpt2.convert_megatron_gpt2_checkpoint import convert_megatron_checkpoint
+from convert_megatron_gpt2_checkpoint import convert_megatron_checkpoint
 from transformers import GPT2Config
 
 def main():
@@ -27,7 +28,7 @@ def main():
     # Spell out all parameters in case the defaults change.
     config = GPT2Config(
         vocab_size=50257,
-        n_positions=1024,
+        n_positions=2048,
         n_ctx=1024,
         n_embd=1024,
         n_layer=24,
@@ -54,19 +55,29 @@ def main():
     # Convert.
     print("Converting to HF Checkpoint")
     output_state_dict = convert_megatron_checkpoint(args, input_state_dict, config)
-
+    
     basename = args.output_folder
     os.makedirs(basename, exist_ok=True)
 
     # Print the structure of converted state dict.
     #if args.print_checkpoint_structure:
     #    recursive_print(None, output_state_dict)
-
+    
     # Store the config to file.
     output_config_file = os.path.join(basename, "config.json")
     output_config = config.to_dict()
-    output_config["architectures"] = ["GPT2LMHeadModel"]
-    output_config["model_type"] = "gpt2"
+    output_config["architectures"] = ["MyGPT2LMHeadModel"]
+    output_config["model_type"] = "my_gpt2"
+    
+    output_config["auto_map"] = {
+        "AutoConfig": "configuration_my_gpt2.MyGPT2Config",
+        "AutoModel": "modeling_my_gpt2.MyGPT2Model",
+        "AutoModelForSequenceClassification": "modeling_my_gpt2.MyGPT2ForSequenceClassification",
+        "AutoModelForTokenClassification": "modeling_my_gpt2.MyGPT2ForTokenClassification",
+        "AutoModelForQuestionAnswering": "modeling_my_gpt2.MyGPT2ForQuestionAnswering",
+        "AutoModelForCausalLM": "modeling_my_gpt2.MyGPT2LMHeadModel"
+    }
+    
     print(f'Saving config to "{output_config_file}"')
     with open(output_config_file, "w") as f:
         json.dump(output_config, f)
@@ -75,9 +86,22 @@ def main():
     output_checkpoint_file = os.path.join(basename, "pytorch_model.bin")
     print(f'Saving checkpoint to "{output_checkpoint_file}"')
     torch.save(output_state_dict, output_checkpoint_file)
-
+    
     print("Now add tokenizer files and upload to the hub")
 
 
+    print("Now add remote code")
+    remote_code_dir = os.path.expanduser(
+        "~/lab/llm-jp/convert_to_transformers/experiments/dev/my_gpt"
+    )
+    shutil.copy(
+        os.path.join(remote_code_dir, "modeling_my_gpt2.py"),
+        os.path.join(basename, "modeling_my_gpt2.py")
+    )
+    shutil.copy(
+        os.path.join(remote_code_dir, "configuration_my_gpt2.py"),
+        os.path.join(basename, "configuration_my_gpt2.py")
+    )
+    
 if __name__ == "__main__":
     main()
