@@ -180,12 +180,12 @@ def _set_wandb_writer(args):
             now = datetime.now()
             now = now.strftime("%Y-%m-%d-%H-%M-%S")
             exp_name = args.wandb_name + "-" + now
-            entity: str = args.wandb_entity or "llm-jp"
+            entity: str = args.wandb_entity
             wandb_input = {
                 "entity": entity,
                 "name": exp_name,
                 "config": args,
-                "project": "MDS-175B-2023-1005",
+                "project": args.wandb_project,
             }
             if args.wandb_id is not None:
                 wandb_input["id"] = args.wandb_id
