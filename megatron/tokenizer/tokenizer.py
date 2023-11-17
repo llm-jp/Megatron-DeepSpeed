@@ -14,7 +14,7 @@ def build_tokenizer(args):
     if args.rank == 0:
         print('> building {} tokenizer ...'.format(args.tokenizer_type),
               flush=True)
-
+        
     # Select and instantiate the tokenizer.
     if args.tokenizer_type == 'BertWordPieceLowerCase':
         assert args.vocab_file is not None

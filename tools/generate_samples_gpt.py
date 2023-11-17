@@ -120,7 +120,7 @@ def main():
     initialize_megatron(
         extra_args_provider=add_text_generate_args,
         args_defaults={
-            'tokenizer_type': 'GPT2BPETokenizer',
+            'tokenizer_type': 'SentencePieceTokenizer',
             'no_load_rng': True,
             'no_load_optim': True},
         allow_no_cuda=False,
@@ -167,7 +167,6 @@ def main():
         attention_mask,
         # inference_params=inference_params
     )
-
     
     from IPython import embed; embed()
     # model(input_ids, position_ids, attention_mask)
