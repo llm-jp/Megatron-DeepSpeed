@@ -13,7 +13,7 @@ module load nccl/2.16/2.16.2-1
 module load hpcx/2.12
 
 # python virtualenv
-cd /bb/llm/gaf51275/llm-jp/Megatron-DeepSpeed
+cd /home/acf15649kv/llm-jp/Megatron-DeepSpeed
 source .env/bin/activate
 
 ## GPT-3 1.3B
@@ -99,7 +99,7 @@ eval_interval=100
 num_save=100
 estimated_train_iter=$((${train_tokens} / ${sequence_length} / ${global_batch_size}))
 # save_interval=$((${estimated_train_iter} / ${num_save}))
-save_interval=150
+save_interval=50
 
 ## Activation checkpointing saves GPU memory, but reduces training speed
 # activation_checkpoint="true"

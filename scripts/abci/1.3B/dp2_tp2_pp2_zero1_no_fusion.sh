@@ -13,7 +13,7 @@ module load nccl/2.16/2.16.2-1
 module load hpcx/2.12
 
 # python virtualenv
-cd /bb/llm/gaf51275/llm-jp/Megatron-DeepSpeed
+cd /home/acf15649kv/llm-jp/Megatron-DeepSpeed
 source .env/bin/activate
 
 ## GPT-3 1.3B
