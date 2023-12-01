@@ -152,7 +152,8 @@ def main():
 
     args = parse_arguments()
     print(f'Converting DeepSpeed checkpoint in {args.input_folder} to Megatron checkpoint in {args.output_folder}')
-
+    os.makedirs(args.output_folder, exist_ok=True)
+    
     ds_checkpoint = DeepSpeedCheckpoint(args.input_folder, args.target_tp, args.target_pp)
     iteration = ds_checkpoint.get_iteration()
     _create_latest_file(args.output_folder, iteration)

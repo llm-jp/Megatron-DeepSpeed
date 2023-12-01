@@ -8,6 +8,7 @@ import argparse
 import tempfile
 import glob
 
+THIS_FILE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 from deepspeed_checkpoint import DeepSpeedCheckpoint
 from deepspeed_to_megatron import _create_rank_checkpoint
@@ -19,7 +20,6 @@ from convert_megatron_gpt2_checkpoint import convert_megatron_checkpoint
 from transformers import AutoConfig
 from huggingface_hub import snapshot_download
 
-
 def parse_arguments():
     parser = argparse.ArgumentParser()
     parser.add_argument('--input_folder', type=str, help='Input DeepSpeed Checkpoint folder', required=True)
@@ -27,12 +27,11 @@ def parse_arguments():
     parser.add_argument('--target_tp', default=1, type=int, help='Target TP degree')
     parser.add_argument('--target_pp', default=1, type=int, help='Target PP degree')
     parser.add_argument('--for_release', action='store_true', help='Convert for release purpose, reset some (progress) counters.')
-    parser.add_argument('--base_hf_model_name_or_path', type=str, help='Base HF model name or path', required=True)
+    parser.add_argument('--base_hf_model_name_or_path', type=str, help='Base HF model name or path', default=os.path.join(THIS_FILE_DIR, "llm-jp-gpt"))
     parser.add_argument('--temp_dir', type=str, help='Temp dir')
     args = parser.parse_args()
     print(f'args = {args}')
     return args
-
 
 def main():
 
@@ -51,25 +50,38 @@ def main():
         temp_dir = tempfile.mkdtemp()
     else:
         temp_dir = args.temp_dir
-
+        
     # Download the base model.
-    print("Downloading base model")
-    snapshot_download(
-        repo_id=args.base_hf_model_name_or_path,
-        repo_type="model",
-        local_dir=temp_dir,
-        local_dir_use_symlinks=False,
-        force_download=True,
-        allow_patterns=["*.py"],
-    )
-    snapshot_download(
-        repo_id=args.base_hf_model_name_or_path,
-        repo_type="model",
-        local_dir=temp_dir,
-        local_dir_use_symlinks=False,
-        force_download=True,
-        allow_patterns=["config.json", "generation_config.json"],
-    )
+    print("Loading base model")
+    if os.path.isdir(args.base_hf_model_name_or_path):
+        for path in glob.glob(os.path.join(args.base_hf_model_name_or_path, "*.py")):
+            shutil.copy(path, temp_dir)
+        shutil.copy(
+            os.path.join(args.base_hf_model_name_or_path, "config.json"),
+            temp_dir
+        )
+        shutil.copy(
+            os.path.join(args.base_hf_model_name_or_path, "generation_config.json"),
+            temp_dir
+        )
+    else:
+        snapshot_download(
+            repo_id=args.base_hf_model_name_or_path,
+            repo_type="model",
+            local_dir=temp_dir,
+            local_dir_use_symlinks=False,
+            force_download=True,
+            allow_patterns=["*.py"],
+        )
+        snapshot_download(
+            repo_id=args.base_hf_model_name_or_path,
+            repo_type="model",
+            local_dir=temp_dir,
+            local_dir_use_symlinks=False,
+            force_download=True,
+            allow_patterns=["config.json", "generation_config.json"],
+        )
+        
     base_condig = AutoConfig.from_pretrained(temp_dir, trust_remote_code=True)
     config_cls = base_condig.__class__
     
@@ -101,11 +113,13 @@ def main():
 
     # Convert.
     print("Converting to HF Checkpoint")
-    output_state_dict = convert_megatron_checkpoint(args, input_state_dict, config)
+    output_state_dict = convert_megatron_checkpoint(
+        args, input_state_dict, config, not_transpose_linear_layer_weights=True
+    )
     
     basename = args.output_folder
     os.makedirs(basename, exist_ok=True)
-
+    
     # Print the structure of converted state dict.
     #if args.print_checkpoint_structure:
     #    recursive_print(None, output_state_dict)
@@ -118,22 +132,11 @@ def main():
     output_config["model_type"] = base_condig.model_type
     output_config["auto_map"] = base_condig.auto_map
     
-    # output_config["architectures"] = ["MyGPT2LMHeadModel"]
-    # output_config["model_type"] = "my_gpt2"
-    
-    # output_config["auto_map"] = {
-    #     "AutoConfig": "configuration_my_gpt2.MyGPT2Config",
-    #     "AutoModel": "modeling_my_gpt2.MyGPT2Model",
-    #     "AutoModelForSequenceClassification": "modeling_my_gpt2.MyGPT2ForSequenceClassification",
-    #     "AutoModelForTokenClassification": "modeling_my_gpt2.MyGPT2ForTokenClassification",
-    #     "AutoModelForQuestionAnswering": "modeling_my_gpt2.MyGPT2ForQuestionAnswering",
-    #     "AutoModelForCausalLM": "modeling_my_gpt2.MyGPT2LMHeadModel"
-    # }
     
     print(f'Saving config to "{output_config_file}"')
     with open(output_config_file, "w") as f:
-        json.dump(output_config, f)
-
+        json.dump(output_config, f, indent=4)
+        
     # Store the state_dict to file.
     output_checkpoint_file = os.path.join(basename, "pytorch_model.bin")
     print(f'Saving checkpoint to "{output_checkpoint_file}"')
@@ -142,18 +145,6 @@ def main():
     # print("Now add tokenizer files and upload to the hub")
 
     print("Now add remote code")
-    # remote_code_dir = os.path.expanduser(
-    #     "~/lab/llm-jp/convert_to_transformers/experiments/dev/my_gpt"
-    # )
-    # shutil.copy(
-    #     os.path.join(remote_code_dir, "modeling_my_gpt2.py"),
-    #     os.path.join(basename, "modeling_my_gpt2.py")
-    # )
-    # shutil.copy(
-    #     os.path.join(remote_code_dir, "configuration_my_gpt2.py"),
-    #     os.path.join(basename, "configuration_my_gpt2.py")
-    # )
-    
     # Copy all python scripts in the temp dir to the output dir.
     for path in glob.glob(os.path.join(temp_dir, "*.py")):
         shutil.copy(path, basename)

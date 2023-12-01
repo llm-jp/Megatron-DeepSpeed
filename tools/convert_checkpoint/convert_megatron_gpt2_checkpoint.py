@@ -91,7 +91,7 @@ def fix_query_key_value_ordering(param, checkpoint_version, num_splits, num_head
 ####################################################################################################
 
 
-def convert_megatron_checkpoint(args, input_state_dict, config):
+def convert_megatron_checkpoint(args, input_state_dict, config, not_transpose_linear_layer_weights=False):
     # The converted output model.
     output_state_dict = {}
 
@@ -119,7 +119,7 @@ def convert_megatron_checkpoint(args, input_state_dict, config):
         checkpoint_version = input_state_dict["checkpoint_version"]
     else:
         checkpoint_version = 0.0
-
+        
     # The model.
     model = input_state_dict["model"]
     # The language model.
@@ -152,7 +152,7 @@ def convert_megatron_checkpoint(args, input_state_dict, config):
 
     # The regex to extract layer names.
     layer_re = re.compile(r"layers\.(\d+)\.([a-z0-9_.]+)\.([a-z]+)")
-
+    
     # The simple map of names for "automated" rules.
     megatron_to_transformers = {
         "attention.dense": ".attn.c_proj.",
@@ -169,7 +169,7 @@ def convert_megatron_checkpoint(args, input_state_dict, config):
         # Stop if that's not a layer
         if m is None:
             break
-
+        
         # The index of the layer.
         layer_idx = int(m.group(1))
         # The name of the operation.
@@ -200,11 +200,15 @@ def convert_megatron_checkpoint(args, input_state_dict, config):
             output_state_dict[layer_name + ".attn.masked_bias"] = masked_bias
 
             out_val = fix_query_key_value_ordering(val, checkpoint_version, 3, heads, hidden_size_per_head)
-            # Megatron stores (3*D) x D but transformers-GPT2 expects D x 3*D.
-            out_val = out_val.transpose(0, 1).contiguous()
+
+            if not_transpose_linear_layer_weights:
+                out_val = out_val.contiguous()
+            else:
+                # Megatron stores (3*D) x D but transformers-GPT2 expects D x 3*D.
+                out_val = out_val.transpose(0, 1).contiguous()
             # Store.
             output_state_dict[layer_name + ".attn.c_attn.weight"] = out_val
-
+            
         # Transpose the bias.
         elif (
             op_name == "attention.query_key_value" or op_name == "self_attention.query_key_value"
@@ -216,7 +220,10 @@ def convert_megatron_checkpoint(args, input_state_dict, config):
         # Transpose the weights.
         elif weight_or_bias == "weight":
             out_name = megatron_to_transformers[op_name]
-            output_state_dict[layer_name + out_name + "weight"] = val.transpose(0, 1)
+            
+            if not not_transpose_linear_layer_weights:
+                val = val.transpose(0, 1)
+            output_state_dict[layer_name + out_name + "weight"] = val
 
         # Copy the bias.
         elif weight_or_bias == "bias":
