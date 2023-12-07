@@ -312,7 +312,7 @@ def throughput_calculator(model, args, iteration_time, total_iterations):
         seq_len = args.actual_seq_length
     flops_per_iteration = (24 * checkpoint_activations_factor * batch_size * seq_len * num_layers * (hidden_size**2)) * (1. + (seq_len / (6. * hidden_size)) + (vocab_size / (16. * num_layers * hidden_size)))
     tflops = flops_per_iteration / (elapsed_time_per_iter * args.world_size * (10**12))
-    return samples_per_second, tflops, model_parameters, models_parameters_per_gpu
+    return samples_per_second, tflops
 
 def checkpoint_throughput_calculator(model, latency_second):
     approx_parameters_in_billions = get_parameters_in_billions(model)
