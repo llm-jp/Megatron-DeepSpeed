@@ -418,6 +418,32 @@ def validate_args(args):
     args.curriculum_learning_legacy = False
     args.compression_training = False
 
+    # Skip train iterations
+    if args.skip_train_iteration_range is not None:
+        import collections
+
+        args.skip_train_iteration_range = [
+            list(map(int, range_.split("-"))) for range_ in args.skip_train_iteration_range
+        ]
+        args.skip_train_iteration_range.sort()
+        skip_train_iteration_range = collections.deque()
+        for range_ in args.skip_train_iteration_range:
+            if len(range_) == 2:
+                start, end = range_
+                assert end >= start, "end of skip range cannot be smaller than start of skip range"
+                # merge overlapping intervals (e.g. 1-5 2-6 -> 1-6)
+                if not skip_train_iteration_range:
+                    skip_train_iteration_range.append([start, end])
+                elif skip_train_iteration_range[-1][1] >= start:
+                    skip_train_iteration_range[-1][1] = max(end, skip_train_iteration_range[-1][1])
+                else:
+                    skip_train_iteration_range.append([start, end])
+            else:
+                raise ValueError(
+                    "skip train iterations should be specified as two numbers, i.e. start-end"
+                )
+        args.skip_train_iteration_range = skip_train_iteration_range
+
     # FlashAttention
     args.use_flash_attn = args.use_flash_attn_v1 or args.use_flash_attn_triton or args.use_flash_attn_v2
 
@@ -939,7 +965,8 @@ def _add_training_args(parser):
                        help='Use Tutel optimization for MoE')
     group.add_argument('--inference', action='store_true',
                        help='Very basic inference mode: not allocating optim/lr - requires ZERO_STAGE=0')
-
+    group.add_argument('--skip-train-iteration-range', type=str, nargs='+', default=None,
+                       help='Iteration ranges to skip. The values are one or more dash-separated ranges. e.g., 101-200 251-300.')
     group.add_argument('--no-async-tensor-model-parallel-allreduce',
                        action='store_false',
                        help='Disable asynchronous execution of '
