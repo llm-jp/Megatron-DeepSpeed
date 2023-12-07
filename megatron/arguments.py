@@ -867,6 +867,7 @@ def _add_training_args(parser):
         type=str,
         default=None,
     )
+    group.add_argument("--wandb-project", type=str, default=None)
     group.add_argument(
         "--wandb-name",
         type=str,
