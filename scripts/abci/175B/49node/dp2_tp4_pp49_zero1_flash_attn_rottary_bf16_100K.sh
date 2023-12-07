@@ -202,7 +202,7 @@ megatron_options=" \
     --load ${checkpoint_path} \
     --no-async-tensor-model-parallel-allreduce \
     --use-rotary-position-embeddings \
-    --rotary-percent 0.25
+    --rotary-percent 0.25 \
     --use-flash-attn \
     --tensorboard-queue-size 1 \
     --log-timers-to-tensorboard \
