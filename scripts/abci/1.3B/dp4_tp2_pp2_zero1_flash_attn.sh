@@ -218,6 +218,8 @@ megatron_options=" \
     --distributed-backend nccl \
     --bf16 \
     --seed ${seed} \
+    --save ${checkpoint_path} \
+    --load ${checkpoint_path} \
     --no-async-tensor-model-parallel-allreduce \
     --use-flash-attn-v2 \
     --tensorboard-queue-size 1
