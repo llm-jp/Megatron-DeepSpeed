@@ -13,10 +13,9 @@ from megatron.core import mpu, tensor_parallel
 from megatron.core.enums import ModelType
 from megatron.data.gpt_dataset import build_train_valid_test_datasets
 from megatron.model import GPTModel, GPTModelPipe
-from megatron.model.rotary_pos_embedding import apply_rotary_pos_emb, RotaryEmbedding
 from megatron.training import pretrain
 from megatron.utils import get_ltor_masks_and_position_ids
-from megatron.utils import average_losses_across_data_parallel_group
+from megatron.utils import average_losses_across_data_parallel_group, update_rotary_pos_emb
 from megatron.arguments import core_transformer_config_from_args
 
 import deepspeed
@@ -28,6 +27,7 @@ import subprocess
 from torch import nn
 import torch.nn.functional as F
 
+
 def model_provider(pre_process=True, post_process=True):
     """Build the model."""
 
@@ -36,7 +36,7 @@ def model_provider(pre_process=True, post_process=True):
 
     args = get_args()
     config = core_transformer_config_from_args(args)
-    with deepspeed.zero.Init(data_parallel_group=mpu.get_data_parallel_group(),
+    with deepspeed.zero.Init(sequence_data_parallel_group=mpu.get_sequence_data_parallel_group(),
                              remote_device=None if args.remote_device == 'none' else args.remote_device,
                              config_dict_or_path=args.deepspeed_config,
                              enabled=args.zero_stage == 3,
@@ -70,22 +70,7 @@ def model_provider(pre_process=True, post_process=True):
 
             # For prertaining, since sequence length is fixed, cache rotary embedding in args, to avoid communicating around
             if args.use_rotary_position_embeddings:
-                rotary_dim = args.hidden_size // args.num_attention_heads \
-                    if args.kv_channels is None else args.kv_channels
-
-                if args.rotary_percent < 1.0:
-                    rotary_dim = int(rotary_dim * args.rotary_percent)
-
-                # partial rotary embeddings, which is better than full rotary
-                # Wang and Komatsuzaki et al
-                # https://github.com/kingoflolz/mesh-transformer-jax/
-                rotary_pos_emb = RotaryEmbedding(rotary_dim)(args.seq_length).to(
-                    get_accelerator().current_device_name())
-                if args.fp16:
-                    rotary_pos_emb = rotary_pos_emb.half()
-                elif args.bf16:
-                    rotary_pos_emb = rotary_pos_emb.bfloat16()
-                args.rotary_pos_emb = rotary_pos_emb
+                update_rotary_pos_emb(args.seq_length)
 
         else:
             model = GPTModel(
@@ -121,12 +106,35 @@ def get_batch(data_iterator):
     tokens = tokens_[:, :-1].contiguous()
 
     # Get the masks and postition ids.
+    skip_mask = args.use_flash_attn or args.use_flash_attn_triton
     attention_mask, loss_mask, position_ids = get_ltor_masks_and_position_ids(
         tokens,
         tokenizer.eod,
         args.reset_position_ids,
         args.reset_attention_mask,
-        args.eod_mask_loss)
+        args.eod_mask_loss,
+        skip_mask)
+
+    # For DS's sequence parallel
+    seq_parallel_world_size = mpu.get_sequence_parallel_world_size()
+    seq_parallel_world_rank = mpu.get_sequence_parallel_rank()
+
+    # For Megatron's sequence parallel
+    if args.sequence_parallel:
+        seq_parallel_world_size = mpu.get_tensor_model_parallel_world_size()
+        seq_parallel_world_rank = mpu.get_tensor_model_parallel_rank()
+    seq_length = tokens.size(1)
+
+    assert seq_length % seq_parallel_world_size == 0
+    sub_seq_length = seq_length // seq_parallel_world_size
+    sub_seq_start = seq_parallel_world_rank * sub_seq_length
+    sub_seq_end = (seq_parallel_world_rank + 1) * sub_seq_length
+
+    tokens = tokens[:, sub_seq_start:sub_seq_end]
+    position_ids = position_ids[:, sub_seq_start:sub_seq_end]
+    # For DS's sequence parallel
+    if mpu.get_sequence_parallel_world_size() > 1:
+        labels = labels[:, sub_seq_start:sub_seq_end]
 
     return tokens, labels, loss_mask, attention_mask, position_ids
 
@@ -229,7 +237,7 @@ def calculate_mos_loss(args, stu_output, teacher_model, tokens, position_ids, at
                 position_ids = position_ids[:, :curriculum_seqlen].contiguous()
                 attention_mask = attention_mask[:, :, :curriculum_seqlen, :curriculum_seqlen].contiguous()
                 # No need to truncate labels as we do not need it for the teacher logits
-            tea_output, *tea_other_losses = teacher_model(tokens, position_ids, attention_mask)
+            tea_output, tea_other_losses = teacher_model(tokens, position_ids, attention_mask)
             assert stu_output.size() == tea_output.size(), 'teacher and student output should match in size. Student: {}, Teacher: {}, CL seq length {}'.format(stu_output.size(), tea_output.size(), args.curriculum_seqlen)
 
         student_logits = F.log_softmax(stu_output / kd_temp, dim=2)
@@ -259,13 +267,13 @@ def forward_step(data_iterator, model):
 
     if args.mos or args.kd:
         # The forward func can return either the loss or the logits, depending on whether passing in the labels or not.
-        stu_output, *other_losses = model(tokens, position_ids, attention_mask)
+        stu_output, other_losses = model(tokens, position_ids, attention_mask)
         if args.curriculum_learning_legacy and args.curriculum_seqlen < args.seq_length:
             assert args.curriculum_seqlen is not None
             labels = labels[:, :args.curriculum_seqlen].contiguous()
         output_tensor = tensor_parallel.vocab_parallel_cross_entropy(stu_output.contiguous().float(), labels)
     else:
-        output_tensor, *other_losses = model(tokens, position_ids, attention_mask,
+        output_tensor, other_losses = model(tokens, position_ids, attention_mask,
                                             labels=labels)
     if args.curriculum_learning_legacy and args.curriculum_seqlen < args.seq_length:
         loss_mask = loss_mask[:, :args.curriculum_seqlen].contiguous()

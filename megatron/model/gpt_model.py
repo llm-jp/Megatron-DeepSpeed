@@ -5,7 +5,7 @@
 import torch
 
 from megatron import get_args
-from megatron.core import mpu, tensor_parallel
+from megatron.core import mpu, tensor_parallel, sequence_parallel
 from .module import MegatronModule, fp32_to_float16, float16_to_fp32
 
 from .enums import AttnMaskType
@@ -24,6 +24,18 @@ try:
 except ImportError:
     MixedFusedRMSNorm = None
 
+try:         
+    from deepspeed.checkpoint import (
+        VOCABULARY_PARAMETER_PATTERNS,
+        PIPELINE_REPLICATED_PARAMETER_PATTERNS,
+        TP_REPLICATED_PARAMETER_PATTERNS,
+        PARAMETER_WITH_ROW_PARALLELISM_PATTERNS,
+        PARAMETER_WITH_2_SUB_PARAMS_CAT_DIM_0,
+    )
+    DS_UNIVERSAL_CHECKPOINT_INFO = True 
+except ImportError:
+    DS_UNIVERSAL_CHECKPOINT_INFO = False  
+
 
 def post_language_model_processing(lm_output, labels, logit_weights,
                                    parallel_output,
@@ -41,11 +53,13 @@ def post_language_model_processing(lm_output, labels, logit_weights,
     else:
         # [b s] => [s b]
         labels = labels.transpose(0,1).contiguous()
+        cross_entropy = sequence_parallel.vocab_sequence_parallel_cross_entropy if mpu.get_sequence_parallel_world_size() > 1 \
+            else tensor_parallel.vocab_parallel_cross_entropy
         if fp16_lm_cross_entropy:
             assert output.dtype == torch.half
-            loss = tensor_parallel.vocab_parallel_cross_entropy(output, labels)
+            loss = cross_entropy(output, labels)
         else:
-            loss = tensor_parallel.vocab_parallel_cross_entropy(output.float(), labels)
+            loss = cross_entropy(output.float(), labels)
 
         # [s b] => [b, s]
         loss = loss.transpose(0,1).contiguous()
@@ -112,7 +126,7 @@ class GPTModel(MegatronModule):
                 # If got a None input, need to reset curriculum_seqlen on user side
                 args.curriculum_seqlen = args.seq_length
 
-        lm_output, *moe_losses = self.language_model(
+        lm_output, moe_losses = self.language_model(
             input_ids,
             position_ids,
             attention_mask,
@@ -128,10 +142,7 @@ class GPTModel(MegatronModule):
                 self.parallel_output,
                 self.fp16_lm_cross_entropy)
 
-        if self.return_moe_loss:
-            return (lm_output, *moe_losses)
-        else:
-            return lm_output
+        return lm_output, moe_losses if self.return_moe_loss else lm_output
 
     def state_dict_for_save_checkpoint(self, prefix='', keep_vars=False):
 
@@ -170,7 +181,35 @@ class GPTModel(MegatronModule):
             state_dict["moe_state_dict"] = moe_state_dict
         self.language_model.load_state_dict(state_dict, strict=strict)
 
+    def universal_checkpoint_info(self):
+        info = dict()
+        if DS_UNIVERSAL_CHECKPOINT_INFO:
+            # Vocabulary parameters (embeddings) that require special handling due to padding.
+            info[VOCABULARY_PARAMETER_PATTERNS] = [
+                r"tied_modules.embed.word_embeddings.weight"
+            ]
 
+            # Parameter slices that should be averaged not concatenated.
+            info[TP_REPLICATED_PARAMETER_PATTERNS] = [
+                r"tied_modules.embed.position_embeddings.weight",
+                r"\d+.input_layernorm.weight",
+                r"\d+.input_layernorm.bias",
+                r"\d+.post_attention_layernorm.weight",
+                r"\d+.post_attention_layernorm.bias",
+                r"\d+.self_attention.dense.bias",
+                r"\d+.mlp.dense_4h_to_h.bias",
+                r"\d+.weight",
+                r"\d+.bias",
+            ]
+
+            # Parameter that are sliced on the row dimension
+            info[PARAMETER_WITH_ROW_PARALLELISM_PATTERNS] = [
+                r"\d+.mlp.dense_4h_to_h.weight",
+                r"\d+.self_attention.dense.weight",
+            ]
+
+        return info
+    
 def CrossEntropy(output, labels):
     labels, loss_mask = labels[0], labels[1]
 
@@ -283,6 +322,9 @@ class GPTModelPipe(PipelineModule, MegatronModule):
 
         if args.checkpoint_activations:
             interval = args.checkpoint_num_layers
+        elif args.recompute_granularity == "full" and args.recompute_method == 'uniform':
+            # deepspeed's pipeline doesn't support the block recompute method
+            interval = args.recompute_num_layers
         else:
             interval = 0
 
@@ -308,3 +350,89 @@ class GPTModelPipe(PipelineModule, MegatronModule):
                          topology=topo,
                          activation_checkpoint_interval=interval,
                          partition_method=partition_method)
+
+    @staticmethod
+    def _get_vocab_param_patterns():
+        args = get_args()
+        if args.untie_embeddings_and_output_weights:
+            patterns = [
+                r"\d+.word_embeddings.weight",
+                r"\d+.lm_head.weight"
+            ]
+        else:
+            patterns = [
+                r"tied_modules.embed.word_embeddings.weight"
+            ]
+        return patterns
+
+    def _get_pp_replicated_param_patterns(self):
+        args = get_args()
+        if args.untie_embeddings_and_output_weights:
+            return []
+        patterns = self._get_vocab_param_patterns()
+        if args.add_position_embedding:
+            patterns.append(r"tied_modules.embed.position_embeddings.weight")
+        return patterns
+
+    @staticmethod
+    def _get_tp_replicated_param_patterns():
+        args = get_args()
+        patterns = [
+            r"\d+.input_layernorm.weight",
+            r"\d+.post_attention_layernorm.weight",
+            r"\d+.weight",
+        ]
+        if args.add_position_embedding:
+            patterns.append(r"tied_modules.embed.position_embeddings.weight")
+        if args.add_bias_linear:
+            patterns.extend([
+                r"\d+.self_attention.dense.bias",
+                r"\d+.mlp.dense_4h_to_h.bias",
+            ])
+        if args.normalization == 'layernorm':
+            patterns.extend([
+                r"\d+.input_layernorm.bias",
+                r"\d+.post_attention_layernorm.bias",
+                r"\d+.bias",
+            ])
+        return patterns
+
+    @staticmethod
+    def _get_row_parallel_param_patterns():
+        return [
+            r"\d+.mlp.dense_4h_to_h.weight",
+            r"\d+.self_attention.dense.weight",
+        ]
+
+    @staticmethod
+    def _get_swiglu_col_parallel_param_patterns():
+        args = get_args()
+        if not args.swiglu:
+            return []
+        patterns = [
+            r"\d+.mlp.dense_h_to_4h.weight",
+        ]
+        if args.add_bias_linear:
+            patterns.append(r"\d+.mlp.dense_h_to_4h.bias")
+        return patterns
+
+
+    def universal_checkpoint_info(self):
+        info = dict()
+        if DS_UNIVERSAL_CHECKPOINT_INFO:
+            # Vocabulary parameters (embeddings) that require special handling due to padding.
+            info[VOCABULARY_PARAMETER_PATTERNS] = self._get_vocab_param_patterns()
+
+            # Replicated (shared) parameters on the pipeline dimension
+            info[PIPELINE_REPLICATED_PARAMETER_PATTERNS] = self._get_pp_replicated_param_patterns()
+
+            # Parameter slices that should be averaged not concatenated.
+            info[TP_REPLICATED_PARAMETER_PATTERNS] = self._get_tp_replicated_param_patterns()
+
+            # Parameter that are sliced on the row dimension
+            info[PARAMETER_WITH_ROW_PARALLELISM_PATTERNS] = self._get_row_parallel_param_patterns()
+
+            # SWIGLU parameters are first sliced on dim=0 to tp slices
+            # Then, each tp slice is chunked into 2 to create the linear layers L1, L2 used for silu(L1(x)) * L2(x))
+            info[PARAMETER_WITH_2_SUB_PARAMS_CAT_DIM_0] = self._get_swiglu_col_parallel_param_patterns()
+        return info

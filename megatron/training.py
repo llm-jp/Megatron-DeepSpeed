@@ -41,7 +41,7 @@ from megatron.utils import unwrap_model
 from megatron.data.data_samplers import build_pretraining_data_loader
 from megatron.utils import calc_params_l2_norm
 from megatron.core.pipeline_parallel import get_forward_backward_func
-from megatron.utils import report_memory, throughput_calculator, checkpoint_throughput_calculator
+from megatron.utils import report_memory, throughput_calculator, checkpoint_throughput_calculator, update_rotary_pos_emb
 from megatron.model.vision.knn_monitor import compute_feature_bank
 from megatron.arguments import core_transformer_config_from_args
 
@@ -51,12 +51,40 @@ from deepspeed.compression.compress import init_compression, redundancy_clean
 from deepspeed.runtime.data_pipeline.data_routing.helper import convert_to_random_ltd
 from megatron.model.transformer import ParallelTransformerLayer
 
+from deepspeed import comm as dist
+
+try:
+    import wandb
+except (ImportError, ModuleNotFoundError):
+    wandb = None
+
+
 def print_datetime(string):
     """Note that this call will sync across all ranks."""
     torch_distributed.barrier()
     time_str = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     print_rank_0('[' + string + '] datetime: {} '.format(time_str))
 
+'''
+Since v0.9.0, deepspeed.initialize() has forbidden simultaneous setting of args.deepspeed_config (Path) and ds_config dict.
+So, we use ds_config dict which is the more flexible option. 
+'''
+def _create_ds_config_dict():
+    args = get_args()
+    if isinstance(args.deepspeed_config, dict) :
+        ds_config_dict = args.deepspeed_config
+    else:
+        with open(args.deepspeed_config, 'r', encoding='utf-8') as config_file:
+            ds_config_dict = json.load(config_file)
+
+    if args.universal_checkpoint:
+        ds_config_dict["checkpoint"] = {"load_universal": True}
+
+    # Clear config path
+    args.deepspeed_config = None 
+
+    return ds_config_dict
+    
 
 def pretrain(train_valid_test_dataset_provider,
              model_provider,
@@ -118,18 +146,17 @@ def pretrain(train_valid_test_dataset_provider,
     timers = get_timers()
 
     if args.deepspeed:
-        args.deepspeed_configuration = json.load(
-            open(args.deepspeed_config, 'r', encoding='utf-8'))
-        if "curriculum_learning" in args.deepspeed_configuration and \
-            "enabled" in args.deepspeed_configuration["curriculum_learning"]:
-            args.curriculum_learning_legacy = args.deepspeed_configuration[ \
+        args.deepspeed_config_dict = _create_ds_config_dict()
+        if "curriculum_learning" in args.deepspeed_config_dict and \
+            "enabled" in args.deepspeed_config_dict["curriculum_learning"]:
+            args.curriculum_learning_legacy = args.deepspeed_config_dict[ \
                 "curriculum_learning"]["enabled"]
         if args.curriculum_learning_legacy and not args.no_pipeline_parallel:
             from deepspeed.runtime.data_pipeline.curriculum_scheduler \
                 import CurriculumScheduler
             args.curriculum_scheduler = CurriculumScheduler( \
-                args.deepspeed_configuration["curriculum_learning"])
-        if "compression_training" in args.deepspeed_configuration:
+                args.deepspeed_config_dict["curriculum_learning"])
+        if "compression_training" in args.deepspeed_config_dict:
             args.compression_training = True
 
     # Model, optimizer, and learning rate.
@@ -205,7 +232,7 @@ def pretrain(train_valid_test_dataset_provider,
         print_datetime('after training is done')
         # Clean the model
         if args.compression_training:
-            model = [redundancy_clean(model[0], args.deepspeed_config, mpu)]
+            model = [redundancy_clean(model[0], args.deepspeed_config_dict, mpu)]
 
         if args.save and iteration != 0:
             save_checkpoint(iteration, model, optimizer, opt_param_scheduler)
@@ -228,6 +255,7 @@ def pretrain(train_valid_test_dataset_provider,
                                    test_data_iterator, model,
                                    iteration, process_non_loss_data_func, config,
                                    verbose=True, write_to_tensorboard=not args.skip_train, test=True)
+    return model
 
 
 def update_train_iters(args):
@@ -461,16 +489,13 @@ def load_model_weights_only(model_provider_func):
     lr_scheduler = None
 
     if args.deepspeed:
-        with open(args.deepspeed_config, 'r') as fd:
-            ds_config = json.load(fd)
-
         # When loading just the model weights, ZeRO can be disabled.
-        if 'zero_optimization' in ds_config:
-            del ds_config['zero_optimization']
+        if 'zero_optimization' in args.deepspeed_config_dict:
+            del args.deepspeed_config_dict['zero_optimization']
 
         model, optimizer, _, lr_scheduler = deepspeed.initialize(
             model=model[0],
-            config=ds_config
+            config=args.deepspeed_config_dict
         )
 
         assert not isinstance(model, deepspeed.PipelineEngine), \
@@ -506,7 +531,8 @@ def setup_model_and_optimizer(model_provider_func,
         model, _, _, _ = deepspeed.initialize(
                 model=model[0],
                 args=args,
-                mpu=mpu if args.no_pipeline_parallel else None
+                mpu=mpu if args.no_pipeline_parallel else None,
+                config=args.deepspeed_config_dict,
             )
         model = [model]
         if args.load is not None:
@@ -520,10 +546,11 @@ def setup_model_and_optimizer(model_provider_func,
         model, _, _, _ = deepspeed.initialize(
             model=model[0],
             args=args,
-            mpu=mpu if args.no_pipeline_parallel else None
+            mpu=mpu if args.no_pipeline_parallel else None,
+            config=args.deepspeed_config_dict,
         )
         model = [model]
-        model = [init_compression(model[0].module, args.deepspeed_config, mpu)]
+        model = [init_compression(model[0].module, args.deepspeed_config_dict, mpu)]
 
     unwrapped_model = unwrap_model(model,
                                    (torchDDP, LocalDDP, Float16Module))
@@ -574,7 +601,8 @@ def setup_model_and_optimizer(model_provider_func,
                 args=args,
                 lr_scheduler=opt_param_scheduler,
                 training_data=train_ds,
-                mpu=mpu if args.no_pipeline_parallel else None
+                mpu=mpu if args.no_pipeline_parallel else None,
+                config=args.deepspeed_config_dict,
             )
             model.set_data_post_process_func(data_post_process)
         else:
@@ -583,7 +611,8 @@ def setup_model_and_optimizer(model_provider_func,
                 optimizer=optimizer,
                 args=args,
                 lr_scheduler=opt_param_scheduler,
-                mpu=mpu if args.no_pipeline_parallel else None
+                mpu=mpu if args.no_pipeline_parallel else None,
+                config=args.deepspeed_config_dict,
             )
         if isinstance(model, deepspeed.PipelineEngine):
             # hack to get batch_fn from pretrain_gpt.py
@@ -854,7 +883,7 @@ def training_log(loss_dict, total_loss_dict, learning_rate, iteration,
                               args.consumed_train_samples)
             writer.add_scalar(f"lm-loss-training/{key}" + ' vs tokens', loss_dict[key],
                               args.consumed_train_tokens)
-        if args.log_loss_scale_to_tensorboard and loss_scale is not None:
+        if args.fp16 and args.log_loss_scale_to_tensorboard:
             writer.add_scalar('loss-scale/loss-scale', loss_scale, iteration)
             writer.add_scalar('loss-scale/loss-scale vs samples', loss_scale,
                               args.consumed_train_samples)
@@ -1000,10 +1029,10 @@ def training_log(loss_dict, total_loss_dict, learning_rate, iteration,
             if args.zero_stage > 0:
                 # ZeRO partiions optimizer states
                 opt_stats = get_accelerator().FloatTensor(opt_stats)
-                torch_distributed.all_reduce(opt_stats, group=mpu.get_data_parallel_group())
+                torch.distributed.all_reduce(opt_stats, group=mpu.get_sequence_data_parallel_group())
                 opt_stats_2 = get_accelerator().FloatTensor(opt_stats_2)
-                torch_distributed.all_reduce(opt_stats_2, op=torch_distributed.ReduceOp.MAX,
-                    group=mpu.get_data_parallel_group())
+                torch.distributed.all_reduce(opt_stats_2, op=torch.distributed.ReduceOp.MAX,
+                    group=mpu.get_sequence_data_parallel_group())
 
             if args.tensor_model_parallel_size > 1:
                 opt_stats = get_accelerator().FloatTensor(opt_stats)
@@ -1139,6 +1168,7 @@ def training_log(loss_dict, total_loss_dict, learning_rate, iteration,
         log_string += ' number of nan iterations: {:3d} |'.format(
             total_loss_dict[nan_iters_key])
         log_string += ' samples per second: {:.3f} |'.format(samples_per_sec)
+        log_string += ' tokens per gpu per second (tgs): {:.3f} |'.format(tokens_per_gpu_per_second)
         log_string += ' TFLOPs: {:.2f} |'.format(tflops)
         total_loss_dict[advanced_iters_key] = 0
         total_loss_dict[skipped_iters_key] = 0
@@ -1213,8 +1243,12 @@ def train(forward_step_func, model, optimizer, opt_param_scheduler,
             model[0].set_train_batch_size(global_batch_size)
 
         if args.curriculum_learning_legacy and not args.no_pipeline_parallel:
-            args.curriculum_seqlen = args.curriculum_scheduler.update_difficulty( \
+            curriculum_seqlen = args.curriculum_scheduler.update_difficulty( \
                     args.iteration + 1)
+            if iteration == 0 or curriculum_seqlen != args.curriculum_seqlen:
+                if args.use_rotary_position_embeddings:
+                    update_rotary_pos_emb(curriculum_seqlen)
+            args.curriculum_seqlen = curriculum_seqlen
         args.curr_iteration = iteration
         loss_dict, skipped_iter, grad_norm, num_zeros_in_grad = \
             train_step(forward_step_func,
@@ -1349,6 +1383,8 @@ def evaluate(forward_step_func,
         # engine.
         if args.curriculum_seqlen < args.seq_length:
             args.curriculum_seqlen = args.seq_length
+            if args.use_rotary_position_embeddings:
+                update_rotary_pos_emb(args.curriculum_seqlen)
             model[0].reset_activation_shape()
 
     total_loss_dict = {}
@@ -1421,6 +1457,8 @@ def evaluate(forward_step_func,
         args.curriculum_seqlen = args.curriculum_scheduler.update_difficulty( \
             args.iteration + 1)
         if args.curriculum_seqlen < args.seq_length:
+            if args.use_rotary_position_embeddings:
+                update_rotary_pos_emb(args.curriculum_seqlen)
             model[0].reset_activation_shape()
 
     return total_loss_dict, collected_non_loss_data
@@ -1531,8 +1569,9 @@ def build_train_valid_test_data_loaders(
                 args.eval_iters * args.global_batch_size
 
     # Data loader only on rank 0 of each model parallel group.
-    if mpu.get_tensor_model_parallel_rank() == 0:
-
+    ds_sequence_parallel = mpu.get_sequence_parallel_world_size() > 1 or args.force_ds_sequence_parallel
+    rank_in_parallel_group = mpu.get_sequence_parallel_rank() if ds_sequence_parallel else mpu.get_tensor_model_parallel_rank()
+    if rank_in_parallel_group == 0:
         # Build datasets.
         train_ds, valid_ds, test_ds = build_train_valid_test_datasets(
             build_train_valid_test_datasets_provider)
@@ -1555,9 +1594,14 @@ def build_train_valid_test_data_loaders(
         flags = get_accelerator().LongTensor([0, 0, 0])
 
     # Broadcast num tokens.
-    torch_distributed.broadcast(flags,
-                                mpu.get_tensor_model_parallel_src_rank(),
-                                group=mpu.get_tensor_model_parallel_group())
+    if ds_sequence_parallel:
+        torch.distributed.broadcast(flags,
+                                    mpu.get_sequence_parallel_src_rank(),
+                                    group=mpu.get_sequence_parallel_group())
+    else:
+        torch.distributed.broadcast(flags,
+                                    mpu.get_tensor_model_parallel_src_rank(),
+                                    group=mpu.get_tensor_model_parallel_group())
     args.do_train = flags[0].item()
     args.do_valid = flags[1].item()
     args.do_test = flags[2].item()
