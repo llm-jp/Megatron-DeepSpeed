@@ -9,17 +9,18 @@ source .env/bin/activate
 NUM_NODES=1
 NUM_GPUS=8
 
-# GPT-3 6.7B
-model_size=6.7
+# GPT-3 2.7B
+model_size=2.7
 
 num_layers=32
-hidden_size=4096
+hidden_size=2560
 num_attn_heads=32
-global_batch_size=2048
 
-lr=1.2e-4
+global_batch_size=1024
+
+lr=1.6e-4
 min_lr=1.0e-6
-init_std=0.009
+init_std=0.011
 
 sequence_length=2048
 
@@ -62,7 +63,7 @@ mp_size=1 # tensor model parallel size
 ## Pipeline parallelism. To disable PP, set pp_size to 1 and no_pp to true.
 ## Note that currently both curriculum learning and random-LTD are NOT
 ## compatible with pipeline parallelism.
-pp_size=2
+pp_size=1
 no_pp="false"
 
 ## ZeRO-based data parallelism, stage=0 will disable ZeRO
@@ -75,7 +76,7 @@ dp_size=$((${NUM_GPUS} / ${pp_size} / ${mp_size}))
 ## Make sure that batch_size <= global_batch_size*pp_size*mp_size/NUM_GPUS
 ## Reduce it manually if GPU OOM
 # batch_size=$(( ${global_batch_size} / ${dp_size} ))
-batch_size=8
+batch_size=16
 ###############################################################################
 ### Misc configs
 log_interval=1
