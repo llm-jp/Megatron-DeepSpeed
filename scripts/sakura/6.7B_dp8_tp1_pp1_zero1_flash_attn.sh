@@ -15,7 +15,7 @@ model_size=6.7
 num_layers=32
 hidden_size=4096
 num_attn_heads=32
-global_batch_size=1024
+global_batch_size=2048
 
 lr=1.2e-4
 min_lr=1.0e-6
@@ -62,7 +62,7 @@ mp_size=1 # tensor model parallel size
 ## Pipeline parallelism. To disable PP, set pp_size to 1 and no_pp to true.
 ## Note that currently both curriculum learning and random-LTD are NOT
 ## compatible with pipeline parallelism.
-pp_size=1
+pp_size=2
 no_pp="false"
 
 ## ZeRO-based data parallelism, stage=0 will disable ZeRO
