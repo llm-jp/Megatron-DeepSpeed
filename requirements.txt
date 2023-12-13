@@ -27,3 +27,6 @@ nltk
 wheel
 packaging
 ninja
+
+# others
+transformers
