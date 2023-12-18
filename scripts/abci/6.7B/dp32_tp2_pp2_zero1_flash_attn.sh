@@ -112,7 +112,7 @@ dp_size=$((${NUM_GPUS} / ${pp_size} / ${mp_size}))
 ## Make sure that batch_size <= global_batch_size*pp_size*mp_size/NUM_GPUS
 ## Reduce it manually if GPU OOM
 # batch_size=$(( ${global_batch_size} / ${dp_size} ))
-batch_size=2
+batch_size=4
 ###############################################################################
 ### Misc configs
 log_interval=1
@@ -212,7 +212,7 @@ mkdir -p ${checkpoint_path}
 mkdir -p ${tensorboard_path}
 ###############################################################################
 data_options=" \
-    --tokenizer-model /bb/llm/gaf51275/llm-jp/llm-ja-tokenizer/models/ver2/code20K_en40K_ja60K.ver2.2.model \
+    --tokenizer-model /bb/llm/gaf51275/llm-jp/llm-ja-tokenizer/models/ver2/code10K_en20K_ja30K.ver2.2.model \
     --tokenizer-type SentencePieceTokenizer \
     --train-data-path ${data_path} \
     --valid-data-path ${VALIDATION_DATA_PATH} \
@@ -257,8 +257,7 @@ megatron_options=" \
     --no-async-tensor-model-parallel-allreduce \
     --use-flash-attn-v2 \
     --use-rotary-position-embeddings \
-    --rotary-percent 0.25 \
-    --tensorboard-queue-size 1
+    --tensorboard-queue-size 1 \
     --log-timers-to-tensorboard \
     --log-batch-size-to-tensorboard \
     --log-validation-ppl-to-tensorboard \
@@ -307,7 +306,7 @@ mpirun -np $NUM_GPUS \
   -x MASTER_ADDR=$MASTER_ADDR \
   -x MASTER_PORT=$MASTER_PORT \
   -bind-to none -map-by slot \
-  -x NCCL_DEBUG=INFO  -x PATH \
+  -x PATH \
   python pretrain_gpt.py \
   ${megatron_options} \
   --use-mpi \
