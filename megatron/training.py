@@ -1113,6 +1113,9 @@ def training_log(loss_dict, total_loss_dict, learning_rate, iteration,
         wandb_stats["stats/tokens_per_sec"] = tokens_per_sec
         wandb_stats["stats/tokens_per_sec_per_replica"] = tokens_per_sec_per_replica
 
+        # log skip batch
+        wandb_stats["others/skipped_iterations"] = skipped_iter
+
         # only the last rank process has a non-None _GLOBAL_TENSORBOARD_WRITER
         if wandb_writer and is_last_rank():
             if args.log_timers_to_tensorboard:
@@ -1238,6 +1241,7 @@ def train(forward_step_func, model, optimizer, opt_param_scheduler,
         assert model[0].random_ltd_enabled()
         args.random_ltd_layer_num = model[0].random_ltd_scheduler.get_random_ltd_layer_num()
 
+    skipped_iteration: int = 0
     while iteration < args.train_iters and (
         args.train_tokens is None or args.consumed_train_tokens < args.train_tokens
     ):
@@ -1256,6 +1260,7 @@ def train(forward_step_func, model, optimizer, opt_param_scheduler,
                 except TypeError:
                     pass
                 iteration_for_skipping += 1
+                skipped_iteration += 1
             continue
 
         update_num_microbatches(args.consumed_train_samples)
@@ -1305,7 +1310,7 @@ def train(forward_step_func, model, optimizer, opt_param_scheduler,
                 args.consumed_train_tokens += new_samples * args.actual_seq_length
         else:
             args.consumed_train_tokens += new_samples * args.actual_seq_length
-        
+
         # Logging.
         if args.deepspeed:
             if hasattr(model[0].optimizer, 'cur_scale'):
@@ -1317,12 +1322,18 @@ def train(forward_step_func, model, optimizer, opt_param_scheduler,
         params_norm = None
         if args.log_params_norm:
             params_norm = calc_params_l2_norm(model)
-        report_memory_flag = training_log(loss_dict, total_loss_dict,
+        report_memory_flag = training_log(loss_dict,
+                                          total_loss_dict,
                                           optimizer.param_groups[0]['lr'],
-                                          iteration, loss_scale,
-                                          report_memory_flag, skipped_iter,
-                                          grad_norm, params_norm, num_zeros_in_grad,
-                                          model, optimizer)
+                                          iteration,
+                                          loss_scale,
+                                          report_memory_flag,
+                                          skipped_iteration,
+                                          grad_norm,
+                                          params_norm,
+                                          num_zeros_in_grad,
+                                          model,
+                                          optimizer)
 
         # Autoresume
         if args.adlr_autoresume and \
@@ -1378,7 +1389,6 @@ def train(forward_step_func, model, optimizer, opt_param_scheduler,
             torch_distributed.barrier()
             print_datetime('exiting program at iteration {}'.format(iteration))
             sys.exit()
-
 
     return iteration
 

@@ -1,6 +1,6 @@
 #!/bin/bash
 #$ -l rt_AF=2
-#$ -l h_rt=0:30:00
+#$ -l h_rt=8:00:00
 #$ -j y
 #$ -o outputs/1.3B/
 #$ -cwd
@@ -178,6 +178,7 @@ mkdir -p ${checkpoint_path}
 mkdir -p ${tensorboard_path}
 ###############################################################################
 data_options=" \
+    --tokenizer-type GPT2BPETokenizer \
     --vocab-file ${vocab_path} \
     --merge-file ${merge_path} \
     --data-path ${data_path} \
@@ -276,7 +277,8 @@ mpirun -np $NUM_GPUS \
   ${megatron_options} \
   --use-mpi \
   --wandb-entity "okoge" \
-  --wandb-project "megatron-deepspeed-3d" \
+  --wandb-project "megatron-deepspeed-skip-batch" \
   --wandb-name "mpirun-flash-attn-${jobname}" \
+  --skip-train-iteration-range 501-600 \
   ${data_options} \
   ${deepspeed_options}
