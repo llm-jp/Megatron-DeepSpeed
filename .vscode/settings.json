@@ -7,7 +7,9 @@
     "prescale",
     "Rampup",
     "sentencepiece",
-    "seqlen"
+    "seqlen",
+    "swiglu",
+    "tflops"
   ],
   "files.watcherExclude": {
     "**/.git/objects/**": true,
