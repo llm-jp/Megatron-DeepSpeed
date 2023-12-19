@@ -279,6 +279,6 @@ mpirun -np $NUM_GPUS \
   --wandb-entity "okoge" \
   --wandb-project "megatron-deepspeed-skip-batch" \
   --wandb-name "mpirun-flash-attn-${jobname}" \
-  --skip-train-iteration-range 501-600 \
+  --skip-train-iteration-range 501-600 630-650 \
   ${data_options} \
   ${deepspeed_options}
