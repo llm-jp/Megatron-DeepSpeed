@@ -42,7 +42,11 @@ def main(args):
         trust_remote_code=True,
         **kwargs
     )
-
+    
+    if args.gradient_checkpointing:
+        model.gradient_checkpointing_enable()
+    model.eval()
+    
     if args.lora:
         peft_config = LoraConfig(
             r=2,
@@ -59,7 +63,6 @@ def main(args):
     position_ids = torch.tensor([[0, 1, 2]], dtype=torch.long, device=device)
     attention_mask = torch.tensor([[1, 1, 1]], dtype=torch.bool, device=device)
     
-    model.eval()
     output = model(
         input_ids=input_ids,
         position_ids=position_ids,
@@ -75,6 +78,7 @@ if __name__ == "__main__":
     parser.add_argument("--load_8bit", action="store_true")
     parser.add_argument("--load_4bit", action="store_true")
     parser.add_argument("--lora", action="store_true")
+    parser.add_argument("--gradient_checkpointing", action="store_true")
     parser.add_argument("--use_gpu", action='store_true')
     args = parser.parse_args()
     main(args)

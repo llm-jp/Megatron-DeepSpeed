@@ -406,6 +406,7 @@ class LlmJpGPTAttention(nn.Module):
         output_attentions: Optional[bool] = False,
         position_ids: Optional[torch.Tensor] = None,
     ) -> Tuple[Union[torch.Tensor, Tuple[torch.Tensor]], ...]:
+
         if encoder_hidden_states is not None:
             if not hasattr(self, "q_attn"):
                 raise ValueError(
@@ -632,10 +633,10 @@ class LlmJpGPTPreTrainedModel(PreTrainedModel):
                 # Special Scaled Initialization --> There are 2 Layer Norms per Transformer Block
                 p.data.normal_(mean=0.0, std=(self.config.initializer_range / math.sqrt(2 * self.config.n_layer)))
 
-    def _set_gradient_checkpointing(self, module, value=False):
-        if isinstance(module, LlmJpGPTModel):
-            module.gradient_checkpointing = value
-
+    # def _set_gradient_checkpointing(self, module, value=False):
+    #     if isinstance(module, LlmJpGPTModel):
+    #         module.gradient_checkpointing = value
+    
 
 @dataclass
 class LlmJpGPTDoubleHeadsModelOutput(ModelOutput):
@@ -1022,7 +1023,7 @@ class LlmJpGPTModel(LlmJpGPTPreTrainedModel):
 
         output_shape = (-1,) + input_shape[1:] + (hidden_states.size(-1),)
 
-        if self.gradient_checkpointing and self.training:
+        if self.gradient_checkpointing:
             if use_cache:
                 logger.warning_once(
                     "`use_cache=True` is incompatible with gradient checkpointing. Setting `use_cache=False`..."
@@ -1047,24 +1048,19 @@ class LlmJpGPTModel(LlmJpGPTPreTrainedModel):
                     head_mask = head_mask.to(hidden_states.device)
             if output_hidden_states:
                 all_hidden_states = all_hidden_states + (hidden_states,)
-
-            if self.gradient_checkpointing and self.training:
-
-                def create_custom_forward(module):
-                    def custom_forward(*inputs):
-                        # None for past_key_value
-                        return module(*inputs, use_cache, output_attentions)
-
-                    return custom_forward
-
+                
+            if self.gradient_checkpointing:
                 outputs = torch.utils.checkpoint.checkpoint(
-                    create_custom_forward(block),
+                    block,
                     hidden_states,
                     None,
                     attention_mask,
                     head_mask[i],
                     encoder_hidden_states,
                     encoder_attention_mask,
+                    use_cache,
+                    output_attentions,
+                    position_ids,
                 )
             else:
                 outputs = block(
@@ -1078,7 +1074,7 @@ class LlmJpGPTModel(LlmJpGPTPreTrainedModel):
                     output_attentions=output_attentions,
                     position_ids=position_ids,
                 )
-
+            
             hidden_states = outputs[0]
             if use_cache is True:
                 presents = presents + (outputs[1],)
