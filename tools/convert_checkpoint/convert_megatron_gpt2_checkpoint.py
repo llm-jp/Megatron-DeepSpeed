@@ -108,6 +108,13 @@ def convert_megatron_checkpoint(args, input_state_dict, config, not_transpose_li
         config.n_layer = ds_args.num_layers
         config.n_head = ds_args.num_attention_heads
         config.n_inner = ds_args.ffn_hidden_size
+
+        rotary_pos_emb = getattr(ds_args, "rotary_pos_emb", None)
+        if rotary_pos_emb is not None:
+            rotary_ndims = rotary_pos_emb.size(-1)
+        else:
+            rotary_ndims = None
+        config.rotary_ndims = rotary_ndims
         # pprint(config)
 
     # The number of heads.

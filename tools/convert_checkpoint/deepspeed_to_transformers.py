@@ -29,6 +29,8 @@ def parse_arguments():
     parser.add_argument('--for_release', action='store_true', help='Convert for release purpose, reset some (progress) counters.')
     parser.add_argument('--base_hf_model_name_or_path', type=str, help='Base HF model name or path', default=os.path.join(THIS_FILE_DIR, "llm-jp-gpt"))
     parser.add_argument('--temp_dir', type=str, help='Temp dir')
+    parser.add_argument('--bos_token_id', type=int, default=7)
+    parser.add_argument('--eos_token_id', type=int, default=7)
     args = parser.parse_args()
     print(f'args = {args}')
     return args
@@ -42,7 +44,7 @@ def main():
     ds_checkpoint = DeepSpeedCheckpoint(args.input_folder, args.target_tp, args.target_pp)
     iteration = ds_checkpoint.get_iteration()
     input_state_dict = _create_rank_checkpoint(ds_checkpoint, 0, 0, args.for_release)
-
+    
     # the 2nd part comes from transformers.models.megatron_gpt2.convert_megatron_gpt2_checkpoint.main
     # Spell out all parameters in case the defaults change.
 
@@ -107,8 +109,8 @@ def main():
         scale_attn_weights=True,
         gradient_checkpointing=False,
         use_cache=True,
-        bos_token_id=50256,
-        eos_token_id=50256,
+        bos_token_id=args.bos_token_id,
+        eos_token_id=args.eos_token_id,
     )
 
     # Convert.
@@ -151,7 +153,6 @@ def main():
     # Copy generation_config.json to the output dir.
     shutil.copy(os.path.join(temp_dir, "generation_config.json"), basename)
     shutil.rmtree(temp_dir)
-    
     
 if __name__ == "__main__":
     main()

@@ -5,9 +5,6 @@ MDS_MODEL_DIR=/path/to/model/of/megatron_deepspeed_format
 OUTPUT_DIR=/path/to/output/dir/of/huggingface_format
 zsh ./scripts/convert_to_transformers.sh $MDS_MODEL_DIR $OUTPUT_DIR
 ```
-**Do not forget to edit `rotary_ndims` in generated `config.json` when you use rotary position embedding.** It is not automatically done by this script.
-
-
 
 
 ## Inference huggingface
