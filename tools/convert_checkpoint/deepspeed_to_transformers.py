@@ -144,8 +144,7 @@ def main():
     print(f'Saving checkpoint to "{output_checkpoint_file}"')
     shards, index = modeling_utils.shard_checkpoint(output_state_dict, max_shard_size="5GB")
     for shard_file, shard in shards.items():
-        if safe_serialization:
-            safe_save_file(shard, os.path.join(output_checkpoint_file, shard_file), metadata={"format": "pt"})
+        safe_save_file(shard, os.path.join(output_checkpoint_file, shard_file), metadata={"format": "pt"})
     
     # print("Now add tokenizer files and upload to the hub")
 
