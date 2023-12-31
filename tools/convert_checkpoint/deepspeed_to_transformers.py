@@ -19,6 +19,8 @@ from deepspeed_to_megatron import _create_rank_checkpoint
 from convert_megatron_gpt2_checkpoint import convert_megatron_checkpoint
 from transformers import AutoConfig, modeling_utils
 from huggingface_hub import snapshot_download
+from safetensors.torch import save_file as safe_save_file
+
 
 def parse_arguments():
     parser = argparse.ArgumentParser()
