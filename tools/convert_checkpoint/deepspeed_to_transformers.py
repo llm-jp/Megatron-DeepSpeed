@@ -17,7 +17,7 @@ from deepspeed_to_megatron import _create_rank_checkpoint
 # https://github.com/huggingface/transformers/commit/0af901e83 if it diverges we may consider
 # copying that version here instead
 from convert_megatron_gpt2_checkpoint import convert_megatron_checkpoint
-from transformers import AutoConfig
+from transformers import AutoConfig, modeling_utils
 from huggingface_hub import snapshot_download
 
 def parse_arguments():
@@ -142,7 +142,10 @@ def main():
     # Store the state_dict to file.
     output_checkpoint_file = os.path.join(basename, "pytorch_model.bin")
     print(f'Saving checkpoint to "{output_checkpoint_file}"')
-    torch.save(output_state_dict, output_checkpoint_file)
+    shards, index = modeling_utils.shard_checkpoint(output_state_dict, max_shard_size="5GB")
+    for shard_file, shard in shards.items():
+        if safe_serialization:
+            safe_save_file(shard, os.path.join(output_checkpoint_file, shard_file), metadata={"format": "pt"})
     
     # print("Now add tokenizer files and upload to the hub")
 
