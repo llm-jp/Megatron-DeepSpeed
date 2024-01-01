@@ -142,19 +142,17 @@ def main():
         json.dump(output_config, f, indent=4)
         
     # Store the state_dict to file.
-    os.makedirs(basename, exist_ok=True)
-    output_checkpoint_file = os.path.join(basename, "pytorch_model.bin")
-    print(f'Saving checkpoint to "{output_checkpoint_file}"')
+    print(f'Saving checkpoint to "{basename}"')
     shards, index = modeling_utils.shard_checkpoint(output_state_dict, max_shard_size="5GB")
     if index:
         for shard_file, shard in shards.items():
-            torch.save(shard, os.path.join(output_checkpoint_file, shard_file))
+            torch.save(shard, os.path.join(basename, shard_file))
         save_index_file = os.path.join(basename, "pytorch_model.bin.index.json")
         with open(save_index_file, "w", encoding="utf-8") as f:
             content = json.dumps(index, indent=2, sort_keys=True) + "\n"
             f.write(content)
     else:
-        torch.save(output_state_dict, output_checkpoint_file)
+        torch.save(output_state_dict, os.path.join(basename, "pytorch_model.bin"))
 
     print("Now add remote code")
     # Copy all python scripts in the temp dir to the output dir.
