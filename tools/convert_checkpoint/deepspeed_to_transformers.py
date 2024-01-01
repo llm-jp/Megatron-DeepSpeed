@@ -142,6 +142,7 @@ def main():
         json.dump(output_config, f, indent=4)
         
     # Store the state_dict to file.
+    os.makedirs(basename, exist_ok=True)
     output_checkpoint_file = os.path.join(basename, "pytorch_model.bin")
     print(f'Saving checkpoint to "{output_checkpoint_file}"')
     shards, index = modeling_utils.shard_checkpoint(output_state_dict, max_shard_size="5GB")
