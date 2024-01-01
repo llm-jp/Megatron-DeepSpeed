@@ -143,7 +143,7 @@ def main():
         
     # Store the state_dict to file.
     print(f'Saving checkpoint to "{basename}"')
-    shards, index = modeling_utils.shard_checkpoint(output_state_dict, max_shard_size="5GB")
+    shards, index = modeling_utils.shard_checkpoint(output_state_dict)
     if index:
         for shard_file, shard in shards.items():
             torch.save(shard, os.path.join(basename, shard_file))
