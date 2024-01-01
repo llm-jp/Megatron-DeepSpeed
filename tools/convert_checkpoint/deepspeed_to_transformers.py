@@ -145,10 +145,15 @@ def main():
     output_checkpoint_file = os.path.join(basename, "pytorch_model.bin")
     print(f'Saving checkpoint to "{output_checkpoint_file}"')
     shards, index = modeling_utils.shard_checkpoint(output_state_dict, max_shard_size="5GB")
-    for shard_file, shard in shards.items():
-        safe_save_file(shard, os.path.join(output_checkpoint_file, shard_file), metadata={"format": "pt"})
-    
-    # print("Now add tokenizer files and upload to the hub")
+    if index:
+        for shard_file, shard in shards.items():
+            torch.save(shard, os.path.join(output_checkpoint_file, shard_file))
+        save_index_file = os.path.join(basename, "pytorch_model.bin.index.json")
+        with open(save_index_file, "w", encoding="utf-8") as f:
+            content = json.dumps(index, indent=2, sort_keys=True) + "\n"
+            f.write(content)
+    else:
+        torch.save(output_state_dict, output_checkpoint_file)
 
     print("Now add remote code")
     # Copy all python scripts in the temp dir to the output dir.
@@ -157,6 +162,8 @@ def main():
     # Copy generation_config.json to the output dir.
     shutil.copy(os.path.join(temp_dir, "generation_config.json"), basename)
     shutil.rmtree(temp_dir)
+    print(f"Attention: You need to add tokenizer files to {basename}.")
     
+
 if __name__ == "__main__":
     main()
